@@ -4,7 +4,7 @@ pub struct Lexer {
     input: Vec<char>,
     position: usize,
     read_position: usize,
-    ch: char,
+    ch: Option<char>,
 }
 
 impl Lexer {
@@ -13,17 +13,19 @@ impl Lexer {
             input: input.chars().collect(),
             position: 0,
             read_position: 0,
-            ch: '\0',
+            ch: None,
         };
         lexer.read_char();
         lexer
     }
 
     fn read_char(&mut self) {
-        if self.read_position >= self.input.len() {
-            self.ch = '\0';
+        if self.read_position == self.input.len() {
+            self.ch = Some('\0');
+        } else if self.read_position > self.input.len() {
+            self.ch = None;
         } else {
-            self.ch = self.input[self.read_position];
+            self.ch = Some(self.input[self.read_position]);
         }
 
         self.position = self.read_position;
@@ -32,7 +34,7 @@ impl Lexer {
 
     fn read_identifier(&mut self) -> String {
         let start_position = self.position;
-        while is_letter(self.ch) {
+        while self.ch.is_some_and(is_letter) {
             self.read_char();
         }
 
@@ -41,7 +43,7 @@ impl Lexer {
 
     fn read_number(&mut self) -> String {
         let start_position = self.position;
-        while self.ch.is_ascii_digit() {
+        while self.ch.is_some_and(|ch| ch.is_ascii_digit()) {
             self.read_char();
         }
 
@@ -49,7 +51,7 @@ impl Lexer {
     }
 
     fn skip_whitespace(&mut self) {
-        while self.ch.is_whitespace() {
+        while self.ch.is_some_and(|ch| ch.is_whitespace()) {
             self.read_char();
         }
     }
@@ -69,7 +71,12 @@ impl Iterator for Lexer {
     fn next(&mut self) -> Option<Self::Item> {
         self.skip_whitespace();
 
-        let token = match self.ch {
+        let ch = match self.ch {
+            Some(ch) => ch,
+            None => return None,
+        };
+
+        let token = match ch {
             '=' => {
                 if self.peek_char() == Some('=') {
                     self.read_char();
@@ -100,16 +107,16 @@ impl Iterator for Lexer {
             '>' => Token::Gt,
             '\0' => Token::Eof,
             _ => {
-                if is_letter(self.ch) {
+                if is_letter(ch) {
                     let token = Token::lookup_ident(&self.read_identifier());
                     // Exit early, because read_char() is called in the read_identifier() function.
                     return Some(token);
-                } else if self.ch.is_ascii_digit() {
+                } else if ch.is_ascii_digit() {
                     let token = Token::Int(self.read_number());
                     // Exit early, because read_char() is called in the read_number() function.
                     return Some(token);
                 } else {
-                    Token::Illegal(self.ch)
+                    Token::Illegal(ch)
                 }
             }
         };
