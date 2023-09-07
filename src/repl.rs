@@ -15,9 +15,11 @@ pub fn start(input: impl io::Read, mut output: impl io::Write) {
             return;
         }
 
-        let lexer = Lexer::new(&line);
-        for token in lexer.filter(|token| token != &Token::Eof) {
+        let mut lexer = Lexer::new(&line);
+        let mut token = lexer.next_token();
+        while token != Token::Eof {
             writeln!(output, "{:?}", token).unwrap();
+            token = lexer.next_token();
         }
     }
 }

@@ -1,32 +1,30 @@
-use std::cmp::Ordering;
-
 use crate::token::Token;
 
-pub struct Lexer<'a> {
-    input: &'a [u8],
+pub struct Lexer {
+    input: Vec<u8>,
     position: usize,
     read_position: usize,
-    ch: Option<u8>,
+    ch: u8,
 }
 
-impl<'a> Lexer<'a> {
-    pub fn new(input: &'a str) -> Self {
+impl Lexer {
+    pub fn new(input: &str) -> Self {
         let mut lexer = Lexer {
-            input: input.as_bytes(),
+            input: input.as_bytes().to_owned(),
             position: 0,
             read_position: 0,
-            ch: None,
+            ch: 0,
         };
         lexer.read_char();
         lexer
     }
 
     fn read_char(&mut self) {
-        self.ch = match self.read_position.cmp(&self.input.len()) {
-            Ordering::Greater => None,
-            Ordering::Equal => Some(0),
-            Ordering::Less => Some(self.input[self.read_position]),
-        };
+        if self.read_position >= self.input.len() {
+            self.ch = 0;
+        } else {
+            self.ch = self.input[self.read_position];
+        }
 
         self.position = self.read_position;
         self.read_position += 1;
@@ -34,7 +32,7 @@ impl<'a> Lexer<'a> {
 
     fn read_identifier(&mut self) -> &str {
         let start_position = self.position;
-        while self.ch.is_some_and(is_letter) {
+        while is_letter(self.ch) {
             self.read_char();
         }
 
@@ -43,7 +41,7 @@ impl<'a> Lexer<'a> {
 
     fn read_number(&mut self) -> &str {
         let start_position = self.position;
-        while self.ch.is_some_and(|ch| ch.is_ascii_digit()) {
+        while self.ch.is_ascii_digit() {
             self.read_char();
         }
 
@@ -51,40 +49,30 @@ impl<'a> Lexer<'a> {
     }
 
     fn skip_whitespace(&mut self) {
-        while self.ch.is_some_and(|ch| (ch as char).is_whitespace()) {
+        while self.ch.is_ascii_whitespace() {
             self.read_char();
         }
     }
 
-    fn peek_char(&mut self) -> Option<u8> {
+    fn peek_char(&mut self) -> u8 {
         if self.read_position >= self.input.len() {
-            None
+            0
         } else {
-            Some(self.input[self.read_position])
+            self.input[self.read_position]
         }
     }
-}
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = Token;
-
-    fn next(&mut self) -> Option<Self::Item> {
+    pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
 
-        let ch = match self.ch {
-            Some(ch) => ch,
-            None => return None,
-        };
-
-        let token = match ch {
-            b'=' => {
-                if self.peek_char() == Some(b'=') {
+        let token = match self.ch {
+            b'=' => match self.peek_char() {
+                b'=' => {
                     self.read_char();
                     Token::Eq
-                } else {
-                    Token::Assign
                 }
-            }
+                _ => Token::Assign,
+            },
             b';' => Token::Semicolon,
             b'(' => Token::Lparen,
             b')' => Token::Rparen,
@@ -93,36 +81,35 @@ impl<'a> Iterator for Lexer<'a> {
             b'-' => Token::Minus,
             b'{' => Token::Lsquigly,
             b'}' => Token::Rsquigly,
-            b'!' => {
-                if self.peek_char() == Some(b'=') {
+            b'!' => match self.peek_char() {
+                b'=' => {
                     self.read_char();
                     Token::NotEq
-                } else {
-                    Token::Bang
                 }
-            }
+                _ => Token::Bang,
+            },
             b'/' => Token::Slash,
             b'*' => Token::Asterisk,
             b'<' => Token::Lt,
             b'>' => Token::Gt,
             b'\0' => Token::Eof,
             _ => {
-                if is_letter(ch) {
+                if is_letter(self.ch) {
                     let token = Token::lookup_ident(self.read_identifier());
                     // Exit early, because read_char() is called in the read_identifier() function.
-                    return Some(token);
-                } else if ch.is_ascii_digit() {
+                    return token;
+                } else if self.ch.is_ascii_digit() {
                     let token = Token::Int(self.read_number().to_owned());
                     // Exit early, because read_char() is called in the read_number() function.
-                    return Some(token);
+                    return token;
                 } else {
-                    Token::Illegal(ch)
+                    Token::Illegal(self.ch)
                 }
             }
         };
 
         self.read_char();
-        Some(token)
+        token
     }
 }
 
@@ -238,14 +225,11 @@ if (5 < 10) {
         let mut lexer = Lexer::new(input);
 
         for (index, expected) in expected_values.iter().enumerate() {
-            let token = lexer.next();
+            let token = lexer.next_token();
             assert_eq!(
-                token.as_ref(),
-                Some(expected),
+                token, *expected,
                 "tests[{}] - token wrong. expected={:?}, got={:?}",
-                index,
-                expected,
-                token
+                index, expected, token
             );
         }
     }
