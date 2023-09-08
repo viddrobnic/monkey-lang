@@ -1,3 +1,5 @@
+use std::num::ParseIntError;
+
 use thiserror::Error;
 
 use crate::token::Token;
@@ -10,4 +12,8 @@ pub enum Error {
     UnexpectedToken(Token),
     #[error("Expected a statement, got: {0:?}")]
     NotAStatement(Token),
+    #[error("Expected an expression, got: {0:?}")]
+    NotAnExpression(Token),
+    #[error(transparent)]
+    NotANumber(#[from] ParseIntError),
 }

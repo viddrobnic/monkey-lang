@@ -46,4 +46,18 @@ impl Token {
             _ => Token::Ident(ident.to_string()),
         }
     }
+
+    pub fn is_infix(&self) -> bool {
+        match self {
+            Self::Plus
+            | Self::Minus
+            | Self::Slash
+            | Self::Asterisk
+            | Self::Eq
+            | Self::NotEq
+            | Self::Lt
+            | Self::Gt => true,
+            _ => false,
+        }
+    }
 }
