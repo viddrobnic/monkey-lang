@@ -16,4 +16,6 @@ pub enum Error {
     NotAnExpression(Token),
     #[error(transparent)]
     NotANumber(#[from] ParseIntError),
+    #[error("Expected a left expression, got None")]
+    ExpectedLeftExpression,
 }
