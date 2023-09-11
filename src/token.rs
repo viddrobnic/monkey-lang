@@ -48,16 +48,17 @@ impl Token {
     }
 
     pub fn is_infix(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::Plus
-            | Self::Minus
-            | Self::Slash
-            | Self::Asterisk
-            | Self::Eq
-            | Self::NotEq
-            | Self::Lt
-            | Self::Gt => true,
-            _ => false,
-        }
+                | Self::Minus
+                | Self::Slash
+                | Self::Asterisk
+                | Self::Eq
+                | Self::NotEq
+                | Self::Lt
+                | Self::Gt
+                | Self::Lparen
+        )
     }
 }

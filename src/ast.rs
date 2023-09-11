@@ -30,6 +30,7 @@ pub enum Expression {
     BooleanLiteral(BooleanLiteral),
     If(IfExpression),
     FunctionLiteral(FunctionLiteral),
+    FunctionCall(FunctionCall),
     Empty,
 }
 
@@ -57,6 +58,7 @@ impl Expression {
                 ifs.alternative.debug_str()
             ),
             Expression::FunctionLiteral(fun) => fun.debug_str(),
+            Expression::FunctionCall(fun) => fun.debug_str(),
             Expression::Empty => String::new(),
         }
     }
@@ -223,13 +225,33 @@ pub struct FunctionLiteral {
 impl FunctionLiteral {
     pub fn debug_str(&self) -> String {
         format!(
-            "fn ({}) {}",
+            "fn ({}) {{{}}}",
             self.parameters
                 .iter()
                 .map(|ident| ident.name.to_owned())
                 .collect::<Vec<String>>()
                 .join(", "),
             self.body.debug_str(),
+        )
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct FunctionCall {
+    pub function: Box<Expression>,
+    pub arguments: Vec<Expression>,
+}
+
+impl FunctionCall {
+    pub fn debug_str(&self) -> String {
+        format!(
+            "{}({})",
+            self.function.debug_str(),
+            self.arguments
+                .iter()
+                .map(|arg| arg.debug_str())
+                .collect::<Vec<String>>()
+                .join(", ")
         )
     }
 }

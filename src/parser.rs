@@ -23,6 +23,7 @@ impl From<&Token> for Precedence {
             Token::Lt | Token::Gt => Self::LessGreater,
             Token::Plus | Token::Minus => Self::Sum,
             Token::Slash | Token::Asterisk => Self::Product,
+            Token::Lparen => Self::Call,
             _ => Self::Lowest,
         }
     }
@@ -84,16 +85,17 @@ impl Parser {
             return Err(Error::UnexpectedToken(self.peek_token.clone()));
         }
         self.next_token();
+        self.next_token();
 
-        // TODO: Parse the expression. Currently we are skipping it
-        // until we encounter a semicolon
-        while self.current_token != Token::Semicolon {
+        let value = self.parse_expression(Precedence::Lowest)?;
+
+        if self.peek_token == Token::Semicolon {
             self.next_token();
         }
 
         let let_statement = ast::Let {
             name: ast::Identifier { name },
-            value: ast::Expression::Empty,
+            value,
         };
 
         Ok(ast::Statement::Let(let_statement))
@@ -102,16 +104,13 @@ impl Parser {
     fn parse_return_statement(&mut self) -> Result<ast::Statement> {
         self.next_token();
 
-        // TODO: Parse the expression. Currently we are skipping it
-        // until we encounter a semicolon.
-        while self.current_token != Token::Semicolon {
+        let value = self.parse_expression(Precedence::Lowest)?;
+
+        if self.peek_token == Token::Semicolon {
             self.next_token();
         }
 
-        let return_statement = ast::Return {
-            value: ast::Expression::Empty,
-        };
-
+        let return_statement = ast::Return { value };
         Ok(ast::Statement::Return(return_statement))
     }
 
@@ -300,6 +299,21 @@ impl Parser {
     }
 
     fn parse_infix(&mut self, left: ast::Expression) -> Result<ast::Expression> {
+        match self.current_token {
+            Token::Plus
+            | Token::Minus
+            | Token::Slash
+            | Token::Asterisk
+            | Token::Eq
+            | Token::NotEq
+            | Token::Lt
+            | Token::Gt => self.parse_infix_operator(left),
+            Token::Lparen => self.parse_function_call(left),
+            _ => Ok(left),
+        }
+    }
+
+    fn parse_infix_operator(&mut self, left: ast::Expression) -> Result<ast::Expression> {
         let operator = ast::InfixOperatorKind::try_from(&self.current_token)?;
         let precedence = Precedence::from(&self.current_token);
 
@@ -314,6 +328,39 @@ impl Parser {
         };
 
         Ok(ast::Expression::InfixOperator(expression))
+    }
+
+    fn parse_function_call(&mut self, left: ast::Expression) -> Result<ast::Expression> {
+        let fn_call = ast::FunctionCall {
+            function: Box::new(left),
+            arguments: self.parse_call_arguments()?,
+        };
+
+        Ok(ast::Expression::FunctionCall(fn_call))
+    }
+
+    fn parse_call_arguments(&mut self) -> Result<Vec<ast::Expression>> {
+        let mut arguments = vec![];
+
+        self.next_token();
+        if self.current_token == Token::Rparen {
+            return Ok(arguments);
+        }
+
+        arguments.push(self.parse_expression(Precedence::Lowest)?);
+
+        while self.peek_token == Token::Comma {
+            self.next_token();
+            self.next_token();
+            arguments.push(self.parse_expression(Precedence::Lowest)?);
+        }
+
+        if self.peek_token != Token::Rparen {
+            return Err(Error::UnexpectedToken(self.peek_token.clone()));
+        }
+        self.next_token();
+
+        Ok(arguments)
     }
 }
 
@@ -335,22 +382,24 @@ mod tests {
 
     #[test]
     fn test_let_statements() -> Result<()> {
-        let input = r#"
-            let x = 5;
-            let y = 10;
-            let foobar = 838383;
-        "#;
+        let tests = [
+            ("let x = 5;", "x", "5"),
+            ("let y = 10;", "y", "10"),
+            ("let foobar = y;", "foobar", "y"),
+        ];
 
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
+        for (input, expected_name, expected_expr) in tests {
+            let mut parser = Parser::new(Lexer::new(input));
+            let program = parser.parse_program()?;
 
-        let program = parser.parse_program()?;
+            assert_eq!(program.statements.len(), 1);
 
-        assert_eq!(program.statements.len(), 3);
+            let ast::Statement::Let(ast::Let { name, value }) = &program.statements[0] else {
+                panic!("Expected let statement, got: {:?}", program.statements[0]);
+            };
 
-        let names = ["x", "y", "foobar"];
-        for (stmt, name) in program.statements.iter().zip(names) {
-            test_let_statement(stmt, name);
+            assert_eq!(name.name, expected_name);
+            assert_eq!(value.debug_str(), expected_expr);
         }
 
         Ok(())
@@ -372,25 +421,26 @@ mod tests {
 
     #[test]
     fn test_return_statements() -> Result<()> {
-        let input = r#"
-            return 5;
-            return 10;
-            return 993232;
-        "#;
+        let tests = [
+            ("return 5;", "5"),
+            ("return 10;", "10"),
+            ("return 5 * y", "(5 * y)"),
+        ];
 
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
+        for (input, expected_expr) in tests {
+            let mut parser = Parser::new(Lexer::new(input));
+            let program = parser.parse_program()?;
 
-        let program = parser.parse_program()?;
+            assert_eq!(program.statements.len(), 1);
 
-        assert_eq!(program.statements.len(), 3);
+            let ast::Statement::Return(ast::Return { value }) = &program.statements[0] else {
+                panic!(
+                    "Expected return statement, got: {:?}",
+                    program.statements[0]
+                );
+            };
 
-        for stmt in program.statements {
-            assert!(
-                matches!(stmt, ast::Statement::Return(_)),
-                "Expected return statement, got: {:?}",
-                stmt
-            );
+            assert_eq!(value.debug_str(), expected_expr);
         }
 
         Ok(())
@@ -601,6 +651,15 @@ mod tests {
             ("2 / (5 + 5)", "(2 / (5 + 5))"),
             ("-(5 + 5)", "(-(5 + 5))"),
             ("!(true == true)", "(!(true == true))"),
+            ("a + add(b*c) + d", "((a + add((b * c))) + d)"),
+            (
+                "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))",
+                "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))",
+            ),
+            (
+                "add(a + b + c * d / f + g)",
+                "add((((a + b) + ((c * d) / f)) + g))",
+            ),
         ];
 
         for (input, expected) in tests {
@@ -750,11 +809,62 @@ mod tests {
         Ok(())
     }
 
-    fn test_let_statement(stmt: &ast::Statement, name: &str) {
-        let ast::Statement::Let(let_stmt) = stmt else {
-            panic!("statement is not a let statement");
+    #[test]
+    fn test_function_call_expression() -> Result<()> {
+        let input = "add(1, 2*3, 4 + 5);";
+
+        let mut parser = Parser::new(Lexer::new(input));
+        let program = parser.parse_program()?;
+
+        assert_eq!(program.statements.len(), 1);
+
+        let ast::Statement::Expression(ast::Expression::FunctionCall(ref stmt)) =
+            program.statements[0]
+        else {
+            panic!("Expected call expression, got: {:?}", program.statements[0]);
         };
 
-        assert_eq!(let_stmt.name.name, name);
+        assert_eq!(stmt.function.debug_str(), "add");
+        assert_eq!(stmt.arguments.len(), 3);
+        assert_eq!(stmt.arguments[0].debug_str(), "1");
+        assert_eq!(stmt.arguments[1].debug_str(), "(2 * 3)");
+        assert_eq!(stmt.arguments[2].debug_str(), "(4 + 5)");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_function_arguments_parsing() -> Result<()> {
+        let tests = [
+            ("add();", vec![]),
+            ("add(1);", vec!["1"]),
+            ("add(1, 2 * 3, 4 + 5);", vec!["1", "(2 * 3)", "(4 + 5)"]),
+        ];
+
+        for (input, expected) in tests {
+            let mut parser = Parser::new(Lexer::new(input));
+            let program = parser.parse_program()?;
+
+            assert_eq!(program.statements.len(), 1);
+
+            let ast::Statement::Expression(ast::Expression::FunctionCall(ref stmt)) =
+                program.statements[0]
+            else {
+                panic!(
+                    "Expected function call expression, got: {:?}",
+                    program.statements[0]
+                );
+            };
+
+            assert_eq!(
+                stmt.arguments
+                    .iter()
+                    .map(|arg| arg.debug_str())
+                    .collect::<Vec<String>>(),
+                expected
+            );
+        }
+
+        Ok(())
     }
 }

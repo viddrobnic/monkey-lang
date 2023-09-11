@@ -1,8 +1,22 @@
 use std::io::{self, BufRead};
 
-use crate::{lexer::Lexer, token::Token};
+use crate::{lexer::Lexer, parser::Parser};
 
 const PROMPT: &str = ">> ";
+
+const MONKEY_FACE: &str = r#"
+            __,__
+   .--.  .-"     "-.  .--.
+  / .. \/  .-. .-.  \/ .. \
+ | |  '|  /   Y   \  |'  | |
+ | \   \  \ 0 | 0 /  /   / |
+  \ '- ,\.-"""""""-./, -' /
+   ''-' /_   ^ ^   _\ '-''
+       |  \._   _./  |
+       \   \ '~' /   /
+        '._ '-=-' _.'
+           '-----'
+"#;
 
 pub fn start(input: impl io::Read, mut output: impl io::Write) {
     let mut reader = io::BufReader::new(input);
@@ -15,11 +29,21 @@ pub fn start(input: impl io::Read, mut output: impl io::Write) {
             return;
         }
 
-        let mut lexer = Lexer::new(&line);
-        let mut token = lexer.next_token();
-        while token != Token::Eof {
-            writeln!(output, "{:?}", token).unwrap();
-            token = lexer.next_token();
+        let lexer = Lexer::new(&line);
+        let mut parser = Parser::new(lexer);
+
+        let program = parser.parse_program();
+        match program {
+            Ok(program) => {
+                for stmt in program.statements {
+                    writeln!(output, "{}", stmt.debug_str()).unwrap();
+                }
+            }
+            Err(err) => {
+                writeln!(output, "{}", MONKEY_FACE).unwrap();
+                writeln!(output, "Woops! We ran into some monkey business here!").unwrap();
+                writeln!(output, "{}", err).unwrap();
+            }
         }
     }
 }
