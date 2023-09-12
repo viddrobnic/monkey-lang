@@ -1,4 +1,6 @@
 use crate::{
+    evaluate::Evaluate,
+    object::Object,
     parse::Parse,
     parse::{Error, Parser, Precedence, Result},
     token::Token,
@@ -37,6 +39,21 @@ impl Parse for Expression {
         }
 
         Ok(left)
+    }
+}
+
+impl Evaluate for Expression {
+    fn evaluate(&self) -> Object {
+        match self {
+            Expression::Identifier(_) => todo!(),
+            Expression::IntegerLiteral(literal) => Object::Integer(literal.value),
+            Expression::PrefixOperator(prefix) => prefix.evaluate(),
+            Expression::InfixOperator(infix) => infix.evaluate(),
+            Expression::BooleanLiteral(literal) => Object::Boolean(literal.value),
+            Expression::If(if_expr) => if_expr.evaluate(),
+            Expression::FunctionLiteral(_) => todo!(),
+            Expression::FunctionCall(_) => todo!(),
+        }
     }
 }
 
@@ -169,6 +186,24 @@ impl Parse for PrefixOperator {
     }
 }
 
+impl Evaluate for PrefixOperator {
+    fn evaluate(&self) -> Object {
+        let right = self.right.evaluate();
+
+        match self.operator {
+            PrefixOperatorKind::Not => match right {
+                Object::Boolean(bool) => Object::Boolean(!bool),
+                Object::Null => Object::Boolean(true),
+                _ => Object::Boolean(false),
+            },
+            PrefixOperatorKind::Negative => match right {
+                Object::Integer(value) => Object::Integer(-value),
+                _ => Object::Null,
+            },
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct InfixOperator {
     pub operator: InfixOperatorKind,
@@ -194,6 +229,36 @@ impl Parse for InfixOperator {
             left: Box::new(left),
             right: Box::new(right),
         })
+    }
+}
+
+impl Evaluate for InfixOperator {
+    fn evaluate(&self) -> Object {
+        let left = self.left.evaluate();
+        let right = self.right.evaluate();
+
+        if let (Object::Integer(left), Object::Integer(right)) = (&left, &right) {
+            return match self.operator {
+                InfixOperatorKind::Add => Object::Integer(left + right),
+                InfixOperatorKind::Subtract => Object::Integer(left - right),
+                InfixOperatorKind::Multiply => Object::Integer(left * right),
+                InfixOperatorKind::Divide => Object::Integer(left / right),
+                InfixOperatorKind::Equal => Object::Boolean(left == right),
+                InfixOperatorKind::NotEqual => Object::Boolean(left != right),
+                InfixOperatorKind::GreaterThan => Object::Boolean(left > right),
+                InfixOperatorKind::LessThan => Object::Boolean(left < right),
+            };
+        }
+
+        if let (Object::Boolean(left), Object::Boolean(right)) = (&left, &right) {
+            return match self.operator {
+                InfixOperatorKind::Equal => Object::Boolean(left == right),
+                InfixOperatorKind::NotEqual => Object::Boolean(left != right),
+                _ => Object::Null,
+            };
+        }
+
+        Object::Null
     }
 }
 
@@ -255,6 +320,18 @@ impl Parse for IfExpression {
     }
 }
 
+impl Evaluate for IfExpression {
+    fn evaluate(&self) -> Object {
+        let condition = self.condition.evaluate();
+
+        if condition.is_truthy() {
+            self.consequence.evaluate()
+        } else {
+            self.alternative.evaluate()
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct BlockStatement {
     pub statements: Vec<Statement>,
@@ -288,6 +365,14 @@ impl Parse for BlockStatement {
         }
 
         Ok(Self { statements })
+    }
+}
+
+impl Evaluate for BlockStatement {
+    fn evaluate(&self) -> Object {
+        self.statements
+            .iter()
+            .fold(Object::Null, |_, stmt| stmt.evaluate())
     }
 }
 

@@ -3,13 +3,20 @@ mod operator;
 mod statement;
 
 #[cfg(test)]
-mod tests;
+mod evaluate_tests;
+#[cfg(test)]
+mod parse_tests;
 
 pub use expression::*;
 pub use operator::*;
 pub use statement::*;
 
-use crate::{parse::Parse, token::Token};
+use crate::{
+    evaluate::Evaluate,
+    object::Object,
+    parse::{self, Parse},
+    token::Token,
+};
 
 #[derive(Debug, PartialEq)]
 pub struct AST {
@@ -31,7 +38,7 @@ impl Parse for AST {
         parser: &mut crate::parse::Parser,
         precedence: crate::parse::Precedence,
         _: Option<Expression>,
-    ) -> crate::parse::Result<Self> {
+    ) -> parse::Result<Self> {
         let mut statements = Vec::new();
 
         while *parser.get_current_token() != Token::Eof {
@@ -42,5 +49,13 @@ impl Parse for AST {
         }
 
         Ok(AST { statements })
+    }
+}
+
+impl Evaluate for AST {
+    fn evaluate(&self) -> Object {
+        self.statements
+            .iter()
+            .fold(Object::Null, |_, stmt| stmt.evaluate())
     }
 }

@@ -1,4 +1,6 @@
 use crate::{
+    evaluate::Evaluate,
+    object::Object,
     parse::{Error, Parse, Precedence},
     token::Token,
 };
@@ -33,6 +35,16 @@ impl Parse for Statement {
         };
 
         Ok(stmt)
+    }
+}
+
+impl Evaluate for Statement {
+    fn evaluate(&self) -> Object {
+        match self {
+            Statement::Let(_) => todo!(),
+            Statement::Return(_) => todo!(),
+            Statement::Expression(expr) => expr.evaluate(),
+        }
     }
 }
 
