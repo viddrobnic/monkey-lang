@@ -36,7 +36,10 @@ pub fn start(input: impl io::Read, mut output: impl io::Write) {
         let mut parser = Parser::new(lexer);
 
         match parser.parse_program() {
-            Ok(program) => writeln!(output, "{}", program.evaluate().inspect()).unwrap(),
+            Ok(program) => match program.evaluate() {
+                Ok(result) => writeln!(output, "{}", result.inspect()).unwrap(),
+                Err(err) => writeln!(output, "{}", err).unwrap(),
+            },
             Err(err) => write_err(&mut output, err),
         }
     }

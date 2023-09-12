@@ -1,5 +1,5 @@
 use crate::{
-    evaluate::Evaluate,
+    evaluate::{self, Evaluate},
     object::Object,
     parse::Parse,
     parse::{Error, Parser, Precedence, Result},
@@ -43,13 +43,13 @@ impl Parse for Expression {
 }
 
 impl Evaluate for Expression {
-    fn evaluate(&self) -> Object {
+    fn evaluate(&self) -> evaluate::Result<Object> {
         match self {
             Expression::Identifier(_) => todo!(),
-            Expression::IntegerLiteral(literal) => Object::Integer(literal.value),
+            Expression::IntegerLiteral(literal) => Ok(Object::Integer(literal.value)),
             Expression::PrefixOperator(prefix) => prefix.evaluate(),
             Expression::InfixOperator(infix) => infix.evaluate(),
-            Expression::BooleanLiteral(literal) => Object::Boolean(literal.value),
+            Expression::BooleanLiteral(literal) => Ok(Object::Boolean(literal.value)),
             Expression::If(if_expr) => if_expr.evaluate(),
             Expression::FunctionLiteral(_) => todo!(),
             Expression::FunctionCall(_) => todo!(),
@@ -187,18 +187,21 @@ impl Parse for PrefixOperator {
 }
 
 impl Evaluate for PrefixOperator {
-    fn evaluate(&self) -> Object {
-        let right = self.right.evaluate();
+    fn evaluate(&self) -> evaluate::Result<Object> {
+        let right = self.right.evaluate()?;
 
         match self.operator {
             PrefixOperatorKind::Not => match right {
-                Object::Boolean(bool) => Object::Boolean(!bool),
-                Object::Null => Object::Boolean(true),
-                _ => Object::Boolean(false),
+                Object::Boolean(bool) => Ok(Object::Boolean(!bool)),
+                Object::Null => Ok(Object::Boolean(true)),
+                _ => Ok(Object::Boolean(false)),
             },
             PrefixOperatorKind::Negative => match right {
-                Object::Integer(value) => Object::Integer(-value),
-                _ => Object::Null,
+                Object::Integer(value) => Ok(Object::Integer(-value)),
+                _ => Err(evaluate::Error::UnknownOperator(format!(
+                    "-{}",
+                    right.data_type()
+                ))),
             },
         }
     }
@@ -233,12 +236,12 @@ impl Parse for InfixOperator {
 }
 
 impl Evaluate for InfixOperator {
-    fn evaluate(&self) -> Object {
-        let left = self.left.evaluate();
-        let right = self.right.evaluate();
+    fn evaluate(&self) -> evaluate::Result<Object> {
+        let left = self.left.evaluate()?;
+        let right = self.right.evaluate()?;
 
         if let (Object::Integer(left), Object::Integer(right)) = (&left, &right) {
-            return match self.operator {
+            let res = match self.operator {
                 InfixOperatorKind::Add => Object::Integer(left + right),
                 InfixOperatorKind::Subtract => Object::Integer(left - right),
                 InfixOperatorKind::Multiply => Object::Integer(left * right),
@@ -248,17 +251,38 @@ impl Evaluate for InfixOperator {
                 InfixOperatorKind::GreaterThan => Object::Boolean(left > right),
                 InfixOperatorKind::LessThan => Object::Boolean(left < right),
             };
+
+            return Ok(res);
         }
 
-        if let (Object::Boolean(left), Object::Boolean(right)) = (&left, &right) {
+        if let (Object::Boolean(left_bool), Object::Boolean(right_bool)) = (&left, &right) {
             return match self.operator {
-                InfixOperatorKind::Equal => Object::Boolean(left == right),
-                InfixOperatorKind::NotEqual => Object::Boolean(left != right),
-                _ => Object::Null,
+                InfixOperatorKind::Equal => Ok(Object::Boolean(left_bool == right_bool)),
+                InfixOperatorKind::NotEqual => Ok(Object::Boolean(left_bool != right_bool)),
+                _ => Err(evaluate::Error::UnknownOperator(format!(
+                    "{} {} {}",
+                    left.data_type(),
+                    self.operator.debug_str(),
+                    right.data_type()
+                ))),
             };
         }
 
-        Object::Null
+        if left.data_type() != right.data_type() {
+            return Err(evaluate::Error::TypeMismatch(format!(
+                "{} {} {}",
+                left.data_type(),
+                self.operator.debug_str(),
+                right.data_type()
+            )));
+        }
+
+        Err(evaluate::Error::UnknownOperator(format!(
+            "{} {} {}",
+            left.data_type(),
+            self.operator.debug_str(),
+            right.data_type()
+        )))
     }
 }
 
@@ -321,8 +345,8 @@ impl Parse for IfExpression {
 }
 
 impl Evaluate for IfExpression {
-    fn evaluate(&self) -> Object {
-        let condition = self.condition.evaluate();
+    fn evaluate(&self) -> evaluate::Result<Object> {
+        let condition = self.condition.evaluate()?;
 
         if condition.is_truthy() {
             self.consequence.evaluate()
@@ -369,10 +393,18 @@ impl Parse for BlockStatement {
 }
 
 impl Evaluate for BlockStatement {
-    fn evaluate(&self) -> Object {
-        self.statements
-            .iter()
-            .fold(Object::Null, |_, stmt| stmt.evaluate())
+    fn evaluate(&self) -> evaluate::Result<Object> {
+        let mut res = Object::Null;
+
+        for stmt in &self.statements {
+            res = stmt.evaluate()?;
+
+            if matches!(res, Object::Return(_)) {
+                return Ok(res);
+            }
+        }
+
+        Ok(res)
     }
 }
 
