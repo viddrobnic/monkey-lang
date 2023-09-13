@@ -1,6 +1,6 @@
 use crate::{parse::Error, token::Token};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum PrefixOperatorKind {
     Not,
     Negative,
@@ -28,7 +28,7 @@ impl TryFrom<&Token> for PrefixOperatorKind {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum InfixOperatorKind {
     Add,
     Subtract,

@@ -1,6 +1,6 @@
 use crate::{
     evaluate::Evaluate,
-    evaluate::{Error, Result},
+    evaluate::{Environment, Error, Result},
     lexer::Lexer,
     object::Object,
     parse::Parser,
@@ -30,7 +30,8 @@ fn test_eval_integer() -> Result<()> {
         let mut parser = Parser::new(Lexer::new(input));
         let ast = parser.parse_program().unwrap();
 
-        let evaluated = ast.evaluate()?;
+        let mut environment = Environment::default();
+        let evaluated = ast.evaluate(&mut environment)?;
         assert_eq!(evaluated, Object::Integer(*expected));
     }
 
@@ -65,7 +66,8 @@ fn test_eval_bool() -> Result<()> {
         let mut parser = Parser::new(Lexer::new(input));
         let ast = parser.parse_program().unwrap();
 
-        let evaluated = ast.evaluate()?;
+        let mut environment = Environment::default();
+        let evaluated = ast.evaluate(&mut environment)?;
         assert_eq!(evaluated, Object::Boolean(*expected));
     }
 
@@ -87,7 +89,8 @@ fn test_bang_operator() -> Result<()> {
         let mut parser = Parser::new(Lexer::new(input));
         let ast = parser.parse_program().unwrap();
 
-        let evaluated = ast.evaluate()?;
+        let mut environment = Environment::default();
+        let evaluated = ast.evaluate(&mut environment)?;
         assert_eq!(evaluated, Object::Boolean(*expected));
     }
 
@@ -110,7 +113,8 @@ fn test_if_else_expression() -> Result<()> {
         let mut parser = Parser::new(Lexer::new(input));
         let ast = parser.parse_program().unwrap();
 
-        let evaluated = ast.evaluate()?;
+        let mut environment = Environment::default();
+        let evaluated = ast.evaluate(&mut environment)?;
         assert_eq!(evaluated, *expected);
     }
 
@@ -134,7 +138,8 @@ fn test_return_statement() -> Result<()> {
         let mut parser = Parser::new(Lexer::new(input));
         let ast = parser.parse_program().unwrap();
 
-        let evaluated = ast.evaluate()?;
+        let mut environment = Environment::default();
+        let evaluated = ast.evaluate(&mut environment)?;
         assert_eq!(evaluated, expected);
     }
 
@@ -169,13 +174,109 @@ fn test_error_handling() {
             "if (10 > 1) { if (10 > 1) { return true + false; } return 1; }",
             Error::UnknownOperator("BOOLEAN + BOOLEAN".to_string()),
         ),
+        ("foobar", Error::UnknownIdentifier("foobar".to_string())),
     ];
 
     for (input, expected) in tests {
         let mut parser = Parser::new(Lexer::new(input));
         let ast = parser.parse_program().unwrap();
 
-        let evaluated = ast.evaluate();
+        let mut environment = Environment::default();
+        let evaluated = ast.evaluate(&mut environment);
         assert_eq!(evaluated, Err(expected));
     }
+}
+
+#[test]
+fn test_let_statements() {
+    let tests = [
+        ("let a = 5; a;", Object::Integer(5)),
+        ("let a = 5 * 5; a", Object::Integer(25)),
+        ("let a = 5; let b = a; b;", Object::Integer(5)),
+        (
+            "let a = 5; let b = a; let c = a + b + 5; c",
+            Object::Integer(15),
+        ),
+    ];
+
+    for (input, expected) in tests {
+        let mut parser = Parser::new(Lexer::new(input));
+        let ast = parser.parse_program().unwrap();
+
+        let mut environment = Environment::default();
+        let evaluated = ast.evaluate(&mut environment).unwrap();
+        assert_eq!(evaluated, expected);
+    }
+}
+
+#[test]
+fn test_functin_object() {
+    let input = "fn(x) { x + 2; };";
+
+    let mut parser = Parser::new(Lexer::new(input));
+    let ast = parser.parse_program().unwrap();
+
+    let mut environment = Environment::default();
+    let evaluated = ast.evaluate(&mut environment).unwrap();
+
+    let Object::Function(fun) = evaluated else {
+        panic!("expected function object, got: {:?}", evaluated);
+    };
+
+    assert_eq!(fun.parameters.len(), 1);
+    assert_eq!(fun.parameters[0].name, "x");
+
+    assert_eq!(fun.body.debug_str(), "(x + 2)");
+}
+
+#[test]
+fn test_function_application() {
+    let tests = [
+        ("let identity = fn(x) {x}; identity(5)", Object::Integer(5)),
+        (
+            "let identity = fn(x) {return x;}; identity(10);",
+            Object::Integer(10),
+        ),
+        (
+            "let double = fn(x) {x * 2;}; double(5);",
+            Object::Integer(10),
+        ),
+        (
+            "let add = fn(x, y) {x + y;}; add(5, 5)",
+            Object::Integer(10),
+        ),
+        (
+            "let add = fn(x, y) {x + y;}; add(5 + 5, add(5, 5));",
+            Object::Integer(20),
+        ),
+        ("fn(x) {x;}(5)", Object::Integer(5)),
+    ];
+
+    for (input, expected) in tests {
+        let mut parser = Parser::new(Lexer::new(input));
+        let ast = parser.parse_program().unwrap();
+
+        let mut environment = Environment::default();
+        let evaluated = ast.evaluate(&mut environment).unwrap();
+        assert_eq!(evaluated, expected);
+    }
+}
+
+#[test]
+fn test_closures() {
+    let input = r#"
+        let newAdder = fn(x) {
+            fn(y) {x + y};
+        };
+
+        let addTwo = newAdder(2);
+        addTwo(2)
+    "#;
+
+    let mut parser = Parser::new(Lexer::new(input));
+    let ast = parser.parse_program().unwrap();
+
+    let mut environment = Environment::default();
+    let evaluated = ast.evaluate(&mut environment).unwrap();
+    assert_eq!(evaluated, Object::Integer(4));
 }

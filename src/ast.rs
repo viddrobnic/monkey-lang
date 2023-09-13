@@ -12,7 +12,7 @@ pub use operator::*;
 pub use statement::*;
 
 use crate::{
-    evaluate::{self, Evaluate},
+    evaluate::{self, Environment, Evaluate},
     object::Object,
     parse::{self, Parse},
     token::Token,
@@ -53,11 +53,11 @@ impl Parse for AST {
 }
 
 impl Evaluate for AST {
-    fn evaluate(&self) -> evaluate::Result<Object> {
+    fn evaluate(&self, environment: &mut Environment) -> evaluate::Result<Object> {
         let mut res = Object::Null;
 
         for stmt in &self.statements {
-            res = stmt.evaluate()?;
+            res = stmt.evaluate(environment)?;
 
             match res {
                 Object::Return(obj) => return Ok(*obj),

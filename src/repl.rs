@@ -3,7 +3,11 @@ use std::{
     io::{self, BufRead},
 };
 
-use crate::{evaluate::Evaluate, lexer::Lexer, parse::Parser};
+use crate::{
+    evaluate::{Environment, Evaluate},
+    lexer::Lexer,
+    parse::Parser,
+};
 
 const PROMPT: &str = ">> ";
 
@@ -23,6 +27,8 @@ const MONKEY_FACE: &str = r#"
 
 pub fn start(input: impl io::Read, mut output: impl io::Write) {
     let mut reader = io::BufReader::new(input);
+    let mut environment = Environment::default();
+
     loop {
         write!(output, "{}", PROMPT).unwrap();
         output.flush().unwrap();
@@ -36,7 +42,7 @@ pub fn start(input: impl io::Read, mut output: impl io::Write) {
         let mut parser = Parser::new(lexer);
 
         match parser.parse_program() {
-            Ok(program) => match program.evaluate() {
+            Ok(program) => match program.evaluate(&mut environment) {
                 Ok(result) => writeln!(output, "{}", result.inspect()).unwrap(),
                 Err(err) => writeln!(output, "{}", err).unwrap(),
             },

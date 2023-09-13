@@ -1,6 +1,6 @@
 use crate::{
-    evaluate::{self, Evaluate},
-    object::Object,
+    evaluate::{self, Environment, Evaluate},
+    object::{FunctionObject, Object},
     parse::Parse,
     parse::{Error, Parser, Precedence, Result},
     token::Token,
@@ -8,7 +8,7 @@ use crate::{
 
 use super::{InfixOperatorKind, PrefixOperatorKind, Statement};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expression {
     Identifier(Identifier),
     IntegerLiteral(IntegerLiteral),
@@ -43,16 +43,20 @@ impl Parse for Expression {
 }
 
 impl Evaluate for Expression {
-    fn evaluate(&self) -> evaluate::Result<Object> {
+    fn evaluate(&self, environment: &mut Environment) -> evaluate::Result<Object> {
         match self {
-            Expression::Identifier(_) => todo!(),
+            Expression::Identifier(ident) => ident.evaluate(environment),
             Expression::IntegerLiteral(literal) => Ok(Object::Integer(literal.value)),
-            Expression::PrefixOperator(prefix) => prefix.evaluate(),
-            Expression::InfixOperator(infix) => infix.evaluate(),
+            Expression::PrefixOperator(prefix) => prefix.evaluate(environment),
+            Expression::InfixOperator(infix) => infix.evaluate(environment),
             Expression::BooleanLiteral(literal) => Ok(Object::Boolean(literal.value)),
-            Expression::If(if_expr) => if_expr.evaluate(),
-            Expression::FunctionLiteral(_) => todo!(),
-            Expression::FunctionCall(_) => todo!(),
+            Expression::If(if_expr) => if_expr.evaluate(environment),
+            Expression::FunctionLiteral(fun) => Ok(Object::Function(FunctionObject {
+                parameters: fun.parameters.clone(),
+                body: fun.body.clone(),
+                environment: environment.clone(),
+            })),
+            Expression::FunctionCall(fun) => fun.evaluate(environment),
         }
     }
 }
@@ -142,7 +146,7 @@ impl Expression {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Identifier {
     pub name: String,
 }
@@ -158,17 +162,26 @@ impl TryFrom<&Token> for Identifier {
     }
 }
 
-#[derive(Debug, PartialEq)]
+impl Evaluate for Identifier {
+    fn evaluate(&self, environment: &mut Environment) -> evaluate::Result<Object> {
+        match environment.get(&self.name) {
+            Some(val) => Ok(val.clone()),
+            None => Err(evaluate::Error::UnknownIdentifier(self.name.clone())),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct IntegerLiteral {
     pub value: i64,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct BooleanLiteral {
     pub value: bool,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct PrefixOperator {
     pub operator: PrefixOperatorKind,
     pub right: Box<Expression>,
@@ -187,8 +200,8 @@ impl Parse for PrefixOperator {
 }
 
 impl Evaluate for PrefixOperator {
-    fn evaluate(&self) -> evaluate::Result<Object> {
-        let right = self.right.evaluate()?;
+    fn evaluate(&self, environment: &mut Environment) -> evaluate::Result<Object> {
+        let right = self.right.evaluate(environment)?;
 
         match self.operator {
             PrefixOperatorKind::Not => match right {
@@ -207,7 +220,7 @@ impl Evaluate for PrefixOperator {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct InfixOperator {
     pub operator: InfixOperatorKind,
     pub left: Box<Expression>,
@@ -236,9 +249,9 @@ impl Parse for InfixOperator {
 }
 
 impl Evaluate for InfixOperator {
-    fn evaluate(&self) -> evaluate::Result<Object> {
-        let left = self.left.evaluate()?;
-        let right = self.right.evaluate()?;
+    fn evaluate(&self, environment: &mut Environment) -> evaluate::Result<Object> {
+        let left = self.left.evaluate(environment)?;
+        let right = self.right.evaluate(environment)?;
 
         if let (Object::Integer(left), Object::Integer(right)) = (&left, &right) {
             let res = match self.operator {
@@ -286,7 +299,7 @@ impl Evaluate for InfixOperator {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct IfExpression {
     pub condition: Box<Expression>,
     pub consequence: BlockStatement,
@@ -345,18 +358,18 @@ impl Parse for IfExpression {
 }
 
 impl Evaluate for IfExpression {
-    fn evaluate(&self) -> evaluate::Result<Object> {
-        let condition = self.condition.evaluate()?;
+    fn evaluate(&self, environment: &mut Environment) -> evaluate::Result<Object> {
+        let condition = self.condition.evaluate(environment)?;
 
         if condition.is_truthy() {
-            self.consequence.evaluate()
+            self.consequence.evaluate(environment)
         } else {
-            self.alternative.evaluate()
+            self.alternative.evaluate(environment)
         }
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct BlockStatement {
     pub statements: Vec<Statement>,
 }
@@ -393,11 +406,11 @@ impl Parse for BlockStatement {
 }
 
 impl Evaluate for BlockStatement {
-    fn evaluate(&self) -> evaluate::Result<Object> {
+    fn evaluate(&self, environment: &mut Environment) -> evaluate::Result<Object> {
         let mut res = Object::Null;
 
         for stmt in &self.statements {
-            res = stmt.evaluate()?;
+            res = stmt.evaluate(environment)?;
 
             if matches!(res, Object::Return(_)) {
                 return Ok(res);
@@ -408,7 +421,7 @@ impl Evaluate for BlockStatement {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FunctionLiteral {
     pub parameters: Vec<Identifier>,
     pub body: BlockStatement,
@@ -473,7 +486,7 @@ impl Parse for FunctionLiteral {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FunctionCall {
     pub function: Box<Expression>,
     pub arguments: Vec<Expression>,
@@ -489,6 +502,35 @@ impl Parse for FunctionCall {
             function: Box::new(left),
             arguments: Self::parse_call_arguments(parser)?,
         })
+    }
+}
+
+impl Evaluate for FunctionCall {
+    fn evaluate(&self, environment: &mut Environment) -> evaluate::Result<Object> {
+        let function = self.function.evaluate(environment)?;
+        let Object::Function(function) = function else {
+            return Err(evaluate::Error::NotAFunction(
+                function.data_type().to_string(),
+            ));
+        };
+
+        let args = self
+            .arguments
+            .iter()
+            .map(|expr| expr.evaluate(environment))
+            .collect::<evaluate::Result<Vec<_>>>()?;
+
+        let mut extended_env = function.environment.extend();
+
+        for (index, param) in function.parameters.iter().enumerate() {
+            extended_env.set(param.name.clone(), args[index].clone())
+        }
+
+        let evaluated = function.body.evaluate(&mut extended_env)?;
+        match &evaluated {
+            Object::Return(obj) => Ok(*obj.clone()),
+            _ => Ok(evaluated.clone()),
+        }
     }
 }
 

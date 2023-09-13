@@ -1,5 +1,5 @@
 use crate::{
-    evaluate::{self, Evaluate},
+    evaluate::{self, Environment, Evaluate},
     object::Object,
     parse::{Error, Parse, Precedence},
     token::Token,
@@ -7,7 +7,7 @@ use crate::{
 
 use super::{Expression, Identifier};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Statement {
     Let(Let),
     Return(Return),
@@ -39,13 +39,13 @@ impl Parse for Statement {
 }
 
 impl Evaluate for Statement {
-    fn evaluate(&self) -> evaluate::Result<Object> {
+    fn evaluate(&self, environment: &mut Environment) -> evaluate::Result<Object> {
         match self {
-            Statement::Let(_) => todo!(),
-            Statement::Return(return_expr) => {
-                Ok(Object::Return(Box::new(return_expr.value.evaluate()?)))
-            }
-            Statement::Expression(expr) => expr.evaluate(),
+            Statement::Let(stmt) => stmt.evaluate(environment),
+            Statement::Return(return_expr) => Ok(Object::Return(Box::new(
+                return_expr.value.evaluate(environment)?,
+            ))),
+            Statement::Expression(expr) => expr.evaluate(environment),
         }
     }
 }
@@ -64,7 +64,7 @@ impl Statement {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Let {
     pub name: Identifier,
     pub value: Expression,
@@ -101,7 +101,16 @@ impl Parse for Let {
     }
 }
 
-#[derive(Debug, PartialEq)]
+impl Evaluate for Let {
+    fn evaluate(&self, environment: &mut Environment) -> evaluate::Result<Object> {
+        let val = self.value.evaluate(environment)?;
+        environment.set(self.name.name.clone(), val);
+
+        Ok(Object::Null)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct Return {
     pub value: Expression,
 }
