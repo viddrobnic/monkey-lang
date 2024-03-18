@@ -116,6 +116,27 @@ fn test_integer_literal_expression() -> Result<()> {
 }
 
 #[test]
+fn test_string_literal_expression() -> Result<()> {
+    let input = "\"hello world\";";
+
+    let lexer = Lexer::new(input);
+    let mut parser = Parser::new(lexer);
+
+    let program = parser.parse_program()?;
+
+    assert_eq!(program.statements.len(), 1);
+
+    let ast::Statement::Expression(ast::Expression::StringLiteral(ref literal)) =
+        program.statements[0]
+    else {
+        panic!("Expected string literal, got: {:?}", program.statements[0]);
+    };
+
+    assert_eq!(literal, "hello world");
+    Ok(())
+}
+
+#[test]
 fn test_boolean_literal_expression() -> Result<()> {
     let tests = [("true;", true), ("false", false)];
 

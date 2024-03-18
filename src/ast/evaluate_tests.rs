@@ -39,6 +39,25 @@ fn test_eval_integer() -> Result<()> {
 }
 
 #[test]
+fn test_eval_string() -> Result<()> {
+    let tests = [
+        ("\"hello world\"", "hello world"),
+        ("\"hello\" + \" \" + \"world\"", "hello world"),
+    ];
+
+    for (input, expected) in tests.iter() {
+        let mut parser = Parser::new(Lexer::new(input));
+        let ast = parser.parse_program().unwrap();
+
+        let mut environment = Environment::default();
+        let evaluated = ast.evaluate(&mut environment)?;
+        assert_eq!(evaluated, Object::String(expected.to_string()));
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_eval_bool() -> Result<()> {
     let tests = [
         ("true", true),

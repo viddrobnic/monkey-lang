@@ -12,6 +12,7 @@ use super::{InfixOperatorKind, PrefixOperatorKind, Statement};
 pub enum Expression {
     Identifier(Identifier),
     IntegerLiteral(IntegerLiteral),
+    StringLiteral(String),
     PrefixOperator(PrefixOperator),
     InfixOperator(InfixOperator),
     BooleanLiteral(BooleanLiteral),
@@ -47,6 +48,7 @@ impl Evaluate for Expression {
         match self {
             Expression::Identifier(ident) => ident.evaluate(environment),
             Expression::IntegerLiteral(literal) => Ok(Object::Integer(literal.value)),
+            Expression::StringLiteral(literal) => Ok(Object::String(literal.clone())),
             Expression::PrefixOperator(prefix) => prefix.evaluate(environment),
             Expression::InfixOperator(infix) => infix.evaluate(environment),
             Expression::BooleanLiteral(literal) => Ok(Object::Boolean(literal.value)),
@@ -66,6 +68,7 @@ impl Expression {
         match self {
             Expression::Identifier(identifier) => identifier.name.clone(),
             Expression::IntegerLiteral(literal) => literal.value.to_string(),
+            Expression::StringLiteral(literal) => literal.clone(),
             Expression::PrefixOperator(prefix) => format!(
                 "({}{})",
                 prefix.operator.debug_str(),
@@ -95,6 +98,7 @@ impl Expression {
             Token::Int(value) => Self::IntegerLiteral(IntegerLiteral {
                 value: value.parse()?,
             }),
+            Token::String(value) => Self::StringLiteral(value.clone()),
             Token::Bang | Token::Minus => {
                 Self::PrefixOperator(PrefixOperator::parse(parser, precedence, None)?)
             }
@@ -272,6 +276,20 @@ impl Evaluate for InfixOperator {
             return match self.operator {
                 InfixOperatorKind::Equal => Ok(Object::Boolean(left_bool == right_bool)),
                 InfixOperatorKind::NotEqual => Ok(Object::Boolean(left_bool != right_bool)),
+                _ => Err(evaluate::Error::UnknownOperator(format!(
+                    "{} {} {}",
+                    left.data_type(),
+                    self.operator.debug_str(),
+                    right.data_type()
+                ))),
+            };
+        }
+
+        if let (Object::String(left_str), Object::String(right_str)) = (&left, &right) {
+            return match self.operator {
+                InfixOperatorKind::Add => Ok(Object::String(format!("{}{}", left_str, right_str))),
+                InfixOperatorKind::Equal => Ok(Object::Boolean(left_str == right_str)),
+                InfixOperatorKind::NotEqual => Ok(Object::Boolean(left_str != right_str)),
                 _ => Err(evaluate::Error::UnknownOperator(format!(
                     "{} {} {}",
                     left.data_type(),

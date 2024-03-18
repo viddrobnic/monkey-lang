@@ -62,6 +62,18 @@ impl Lexer {
         }
     }
 
+    fn read_string(&mut self) -> &str {
+        let start_position = self.position + 1;
+        loop {
+            self.read_char();
+            if self.ch == b'"' || self.ch == 0 {
+                break;
+            }
+        }
+
+        std::str::from_utf8(&self.input[start_position..self.position]).unwrap()
+    }
+
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
 
@@ -88,6 +100,7 @@ impl Lexer {
                 }
                 _ => Token::Bang,
             },
+            b'"' => Token::String(self.read_string().to_owned()),
             b'/' => Token::Slash,
             b'*' => Token::Asterisk,
             b'<' => Token::Lt,
@@ -143,6 +156,8 @@ if (5 < 10) {
 
 10 == 10;
 10 != 9;
+"foobar"
+"foo bar"
 "#;
 
         let expected_values = vec![
@@ -219,6 +234,8 @@ if (5 < 10) {
             Token::NotEq,
             Token::Int("9".to_string()),
             Token::Semicolon,
+            Token::String("foobar".to_string()),
+            Token::String("foo bar".to_string()),
             Token::Eof,
         ];
 

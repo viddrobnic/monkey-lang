@@ -3,6 +3,7 @@ use crate::{ast, evaluate::Environment};
 #[derive(Debug, PartialEq, Clone)]
 pub enum Object {
     Integer(i64),
+    String(String),
     Boolean(bool),
     Return(Box<Object>),
     Function(FunctionObject),
@@ -13,6 +14,7 @@ impl Object {
     pub fn inspect(&self) -> String {
         match self {
             Object::Integer(i) => i.to_string(),
+            Object::String(s) => s.clone(),
             Object::Boolean(b) => b.to_string(),
             Object::Return(o) => o.inspect(),
             Object::Function(fun) => fun.inspect(),
@@ -27,6 +29,7 @@ impl Object {
     pub fn data_type(&self) -> &str {
         match self {
             Object::Integer(_) => "INTEGER",
+            Object::String(_) => "STRING",
             Object::Boolean(_) => "BOOLEAN",
             Object::Return(_) => "RETURN",
             Object::Function(_) => "FUNCTION",
