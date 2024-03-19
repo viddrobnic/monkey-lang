@@ -304,6 +304,14 @@ fn test_operator_precedence_parsing() -> Result<()> {
             "add(a + b + c * d / f + g)",
             "add((((a + b) + ((c * d) / f)) + g))",
         ),
+        (
+            "a * [1, 2, 3, 4][b * c] * d",
+            "((a * ([1, 2, 3, 4][(b * c)])) * d)",
+        ),
+        (
+            "add(a * b[2], b[1], 2 * [1, 2][1])",
+            "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))",
+        ),
     ];
 
     for (input, expected) in tests {
@@ -505,6 +513,50 @@ fn test_function_arguments_parsing() -> Result<()> {
             expected
         );
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_array_literal_parsing() -> Result<()> {
+    let input = "[1, 2 * 2, 3 + 3]";
+
+    let mut parser = Parser::new(Lexer::new(input));
+    let program = parser.parse_program()?;
+
+    assert_eq!(program.statements.len(), 1);
+
+    let ast::Statement::Expression(ast::Expression::ArrayLiteral(ref stmt)) = program.statements[0]
+    else {
+        panic!("Expected array literal, got: {:?}", program.statements[0]);
+    };
+
+    assert_eq!(stmt.elements.len(), 3);
+    assert_eq!(stmt.elements[0].debug_str(), "1");
+    assert_eq!(stmt.elements[1].debug_str(), "(2 * 2)");
+    assert_eq!(stmt.elements[2].debug_str(), "(3 + 3)");
+
+    Ok(())
+}
+
+#[test]
+fn test_index_expression_parsing() -> Result<()> {
+    let input = "myArray[1 + 1]";
+
+    let mut parser = Parser::new(Lexer::new(input));
+    let program = parser.parse_program()?;
+
+    assert_eq!(program.statements.len(), 1);
+
+    let ast::Statement::Expression(ast::Expression::Index(ref stmt)) = program.statements[0] else {
+        panic!(
+            "Expected index expression, got: {:?}",
+            program.statements[0]
+        );
+    };
+
+    assert_eq!(stmt.left.debug_str(), "myArray");
+    assert_eq!(stmt.index.debug_str(), "(1 + 1)");
 
     Ok(())
 }

@@ -321,6 +321,8 @@ fn test_builtin_functions() {
                 got: 0,
             }),
         ),
+        ("len([])", Ok(Object::Integer(0))),
+        ("len([1, 2, 3])", Ok(Object::Integer(3))),
     ];
 
     for (input, expected) in tests {
@@ -329,6 +331,56 @@ fn test_builtin_functions() {
 
         let mut environment = Environment::default();
         let evaluated = ast.evaluate(&mut environment);
+        assert_eq!(evaluated, expected);
+    }
+}
+
+#[test]
+fn test_array_literals() {
+    let input = "[1, 2 * 2, 3 + 3]";
+
+    let mut parser = Parser::new(Lexer::new(input));
+    let ast = parser.parse_program().unwrap();
+
+    let mut environment = Environment::default();
+    let evaluated = ast.evaluate(&mut environment).unwrap();
+
+    let expected = Object::Array(vec![
+        Object::Integer(1),
+        Object::Integer(4),
+        Object::Integer(6),
+    ]);
+
+    assert_eq!(evaluated, expected);
+}
+
+#[test]
+fn test_array_index_expressions() {
+    let tests = [
+        ("[1, 2, 3][0]", Object::Integer(1)),
+        ("[1, 2, 3][1]", Object::Integer(2)),
+        ("[1, 2, 3][2]", Object::Integer(3)),
+        ("let i = 0; [1][i];", Object::Integer(1)),
+        ("[1, 2, 3][1 + 1];", Object::Integer(3)),
+        ("let myArray = [1, 2, 3]; myArray[2];", Object::Integer(3)),
+        (
+            "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];",
+            Object::Integer(6),
+        ),
+        (
+            "let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]",
+            Object::Integer(2),
+        ),
+        ("[1, 2, 3][3]", Object::Null),
+        ("[1, 2, 3][-1]", Object::Null),
+    ];
+
+    for (input, expected) in tests {
+        let mut parser = Parser::new(Lexer::new(input));
+        let ast = parser.parse_program().unwrap();
+
+        let mut environment = Environment::default();
+        let evaluated = ast.evaluate(&mut environment).unwrap();
         assert_eq!(evaluated, expected);
     }
 }

@@ -19,6 +19,8 @@ pub enum Expression {
     If(IfExpression),
     FunctionLiteral(FunctionLiteral),
     FunctionCall(FunctionCall),
+    ArrayLiteral(ArrayLiteral),
+    Index(IndexExpression),
 }
 
 impl Parse for Expression {
@@ -59,6 +61,16 @@ impl Evaluate for Expression {
                 environment: environment.clone(),
             })),
             Expression::FunctionCall(fun) => fun.evaluate(environment),
+            Expression::ArrayLiteral(arr) => {
+                let elements = arr
+                    .elements
+                    .iter()
+                    .map(|expr| expr.evaluate(environment))
+                    .collect::<evaluate::Result<Vec<_>>>()?;
+
+                Ok(Object::Array(elements))
+            }
+            Expression::Index(index_expr) => index_expr.evaluate(environment),
         }
     }
 }
@@ -89,6 +101,17 @@ impl Expression {
             ),
             Expression::FunctionLiteral(fun) => fun.debug_str(),
             Expression::FunctionCall(fun) => fun.debug_str(),
+            Expression::ArrayLiteral(arr) => format!(
+                "[{}]",
+                arr.elements
+                    .iter()
+                    .map(|expr| expr.debug_str())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+            Expression::Index(index) => {
+                format!("({}[{}])", index.left.debug_str(), index.index.debug_str())
+            }
         }
     }
 
@@ -109,6 +132,7 @@ impl Expression {
             Token::Function => {
                 Self::FunctionLiteral(FunctionLiteral::parse(parser, precedence, None)?)
             }
+            Token::LBracket => Self::ArrayLiteral(ArrayLiteral::parse(parser, precedence, None)?),
             token => return Err(Error::NotAnExpression(token.clone())),
         };
 
@@ -130,6 +154,7 @@ impl Expression {
             Token::Lparen => {
                 Self::FunctionCall(FunctionCall::parse(parser, precedence, Some(left))?)
             }
+            Token::LBracket => Self::Index(IndexExpression::parse(parser, precedence, Some(left))?),
             _ => left,
         };
 
@@ -523,7 +548,7 @@ impl Parse for FunctionCall {
 
         Ok(Self {
             function: Box::new(left),
-            arguments: Self::parse_call_arguments(parser)?,
+            arguments: parse_expression_list(parser, Token::Rparen)?,
         })
     }
 }
@@ -571,29 +596,98 @@ impl FunctionCall {
                 .join(", ")
         )
     }
+}
 
-    fn parse_call_arguments(parser: &mut Parser) -> Result<Vec<Expression>> {
-        let mut arguments = vec![];
+#[derive(Debug, PartialEq, Clone)]
+pub struct ArrayLiteral {
+    pub elements: Vec<Expression>,
+}
+
+impl Parse for ArrayLiteral {
+    fn parse(parser: &mut Parser, _: Precedence, _: Option<Expression>) -> Result<Self> {
+        let elements = parse_expression_list(parser, Token::RBracket)?;
+
+        Ok(Self { elements })
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct IndexExpression {
+    pub left: Box<Expression>,
+    pub index: Box<Expression>,
+}
+
+impl Parse for IndexExpression {
+    fn parse(parser: &mut Parser, _: Precedence, left: Option<Expression>) -> Result<Self> {
+        let Some(left) = left else {
+            return Err(Error::ExpectedLeftExpression);
+        };
 
         parser.step();
-        if *parser.get_current_token() == Token::Rparen {
-            return Ok(arguments);
-        }
+        let index = Expression::parse(parser, Precedence::Lowest, None)?;
 
-        arguments.push(Expression::parse(parser, Precedence::Lowest, None)?);
-
-        while *parser.get_peek_token() == Token::Comma {
-            parser.step();
-            parser.step();
-
-            arguments.push(Expression::parse(parser, Precedence::Lowest, None)?);
-        }
-
-        if *parser.get_peek_token() != Token::Rparen {
+        if *parser.get_peek_token() != Token::RBracket {
             return Err(Error::UnexpectedToken(parser.get_peek_token().clone()));
         }
         parser.step();
 
-        Ok(arguments)
+        Ok(Self {
+            left: Box::new(left),
+            index: Box::new(index),
+        })
     }
+}
+
+impl Evaluate for IndexExpression {
+    fn evaluate(&self, environment: &mut Environment) -> evaluate::Result<Object> {
+        let left = self.left.evaluate(environment)?;
+        let index = self.index.evaluate(environment)?;
+
+        let Object::Array(ref arr) = left else {
+            return Err(evaluate::Error::UnknownOperator(format!(
+                "{}[{}]",
+                left.data_type(),
+                index.data_type()
+            )));
+        };
+
+        let Object::Integer(index) = index else {
+            return Err(evaluate::Error::UnknownOperator(format!(
+                "{}[{}]",
+                left.data_type(),
+                index.data_type()
+            )));
+        };
+
+        if index < 0 || index >= arr.len() as i64 {
+            return Ok(Object::Null);
+        }
+
+        Ok(arr[index as usize].clone())
+    }
+}
+
+fn parse_expression_list(parser: &mut Parser, end: Token) -> Result<Vec<Expression>> {
+    let mut list = vec![];
+
+    parser.step();
+    if *parser.get_current_token() == end {
+        return Ok(list);
+    }
+
+    list.push(Expression::parse(parser, Precedence::Lowest, None)?);
+
+    while *parser.get_peek_token() == Token::Comma {
+        parser.step();
+        parser.step();
+
+        list.push(Expression::parse(parser, Precedence::Lowest, None)?);
+    }
+
+    if *parser.get_peek_token() != end {
+        return Err(Error::UnexpectedToken(parser.get_peek_token().clone()));
+    }
+    parser.step();
+
+    Ok(list)
 }

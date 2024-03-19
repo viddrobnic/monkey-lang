@@ -24,6 +24,8 @@ pub enum Token {
     Rparen,
     Lsquigly,
     Rsquigly,
+    LBracket,
+    RBracket,
     // Keywords
     Function,
     Let,
@@ -60,6 +62,7 @@ impl Token {
                 | Self::Lt
                 | Self::Gt
                 | Self::Lparen
+                | Self::LBracket
         )
     }
 }

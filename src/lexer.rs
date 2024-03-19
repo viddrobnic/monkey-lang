@@ -93,6 +93,8 @@ impl Lexer {
             b'-' => Token::Minus,
             b'{' => Token::Lsquigly,
             b'}' => Token::Rsquigly,
+            b'[' => Token::LBracket,
+            b']' => Token::RBracket,
             b'!' => match self.peek_char() {
                 b'=' => {
                     self.read_char();
@@ -158,6 +160,7 @@ if (5 < 10) {
 10 != 9;
 "foobar"
 "foo bar"
+[1, 2];
 "#;
 
         let expected_values = vec![
@@ -236,6 +239,12 @@ if (5 < 10) {
             Token::Semicolon,
             Token::String("foobar".to_string()),
             Token::String("foo bar".to_string()),
+            Token::LBracket,
+            Token::Int("1".to_string()),
+            Token::Comma,
+            Token::Int("2".to_string()),
+            Token::RBracket,
+            Token::Semicolon,
             Token::Eof,
         ];
 
