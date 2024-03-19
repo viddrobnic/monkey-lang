@@ -323,6 +323,84 @@ fn test_builtin_functions() {
         ),
         ("len([])", Ok(Object::Integer(0))),
         ("len([1, 2, 3])", Ok(Object::Integer(3))),
+        //
+        ("first([1, 2, 3])", Ok(Object::Integer(1))),
+        ("first([])", Ok(Object::Null)),
+        ("first(1)", Err(Error::TypeMismatch("INTEGER".to_string()))),
+        (
+            "first([1, 2], [3, 4])",
+            Err(Error::WrongNumberOfArguments {
+                expected: 1,
+                got: 2,
+            }),
+        ),
+        (
+            "first()",
+            Err(Error::WrongNumberOfArguments {
+                expected: 1,
+                got: 0,
+            }),
+        ),
+        //
+        ("last([1, 2, 3])", Ok(Object::Integer(3))),
+        ("last([])", Ok(Object::Null)),
+        ("last(1)", Err(Error::TypeMismatch("INTEGER".to_string()))),
+        (
+            "last([1, 2], [3, 4])",
+            Err(Error::WrongNumberOfArguments {
+                expected: 1,
+                got: 2,
+            }),
+        ),
+        (
+            "last()",
+            Err(Error::WrongNumberOfArguments {
+                expected: 1,
+                got: 0,
+            }),
+        ),
+        //
+        (
+            "rest([1, 2, 3])",
+            Ok(Object::Array(vec![Object::Integer(2), Object::Integer(3)])),
+        ),
+        ("rest([])", Ok(Object::Null)),
+        ("rest(1)", Err(Error::TypeMismatch("INTEGER".to_string()))),
+        (
+            "rest([1, 2], [3, 4])",
+            Err(Error::WrongNumberOfArguments {
+                expected: 1,
+                got: 2,
+            }),
+        ),
+        (
+            "rest()",
+            Err(Error::WrongNumberOfArguments {
+                expected: 1,
+                got: 0,
+            }),
+        ),
+        (
+            "push([1, 2, 3], 4)",
+            Ok(Object::Array(vec![
+                Object::Integer(1),
+                Object::Integer(2),
+                Object::Integer(3),
+                Object::Integer(4),
+            ])),
+        ),
+        ("push([], 1)", Ok(Object::Array(vec![Object::Integer(1)]))),
+        (
+            "push(1, 1)",
+            Err(Error::TypeMismatch("INTEGER".to_string())),
+        ),
+        (
+            "push()",
+            Err(Error::WrongNumberOfArguments {
+                expected: 2,
+                got: 0,
+            }),
+        ),
     ];
 
     for (input, expected) in tests {

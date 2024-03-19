@@ -6,6 +6,7 @@ use std::{
 use crate::{
     evaluate::{Environment, Evaluate},
     lexer::Lexer,
+    object::Object,
     parse::Parser,
 };
 
@@ -43,8 +44,11 @@ pub fn start(input: impl io::Read, mut output: impl io::Write) {
 
         match parser.parse_program() {
             Ok(program) => match program.evaluate(&mut environment) {
-                Ok(result) => writeln!(output, "{}", result.inspect()).unwrap(),
+                Ok(result) if result != Object::Null => {
+                    writeln!(output, "{}", result.inspect()).unwrap()
+                }
                 Err(err) => writeln!(output, "{}", err).unwrap(),
+                _ => (),
             },
             Err(err) => write_err(&mut output, err),
         }
