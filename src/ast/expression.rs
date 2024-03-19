@@ -1,6 +1,6 @@
 use crate::{
     evaluate::{self, Environment, Evaluate},
-    object::{FunctionObject, Object},
+    object::{BuiltinFunction, FunctionObject, Object},
     parse::Parse,
     parse::{Error, Parser, Precedence, Result},
     token::Token,
@@ -168,10 +168,15 @@ impl TryFrom<&Token> for Identifier {
 
 impl Evaluate for Identifier {
     fn evaluate(&self, environment: &mut Environment) -> evaluate::Result<Object> {
-        match environment.get(&self.name) {
-            Some(val) => Ok(val.clone()),
-            None => Err(evaluate::Error::UnknownIdentifier(self.name.clone())),
+        if let Some(val) = environment.get(&self.name) {
+            return Ok(val.clone());
         }
+
+        if let Some(val) = BuiltinFunction::from_ident(&self.name) {
+            return Ok(Object::Builtin(val));
+        }
+
+        Err(evaluate::Error::UnknownIdentifier(self.name.clone()))
     }
 }
 
@@ -525,29 +530,31 @@ impl Parse for FunctionCall {
 
 impl Evaluate for FunctionCall {
     fn evaluate(&self, environment: &mut Environment) -> evaluate::Result<Object> {
-        let function = self.function.evaluate(environment)?;
-        let Object::Function(function) = function else {
-            return Err(evaluate::Error::NotAFunction(
-                function.data_type().to_string(),
-            ));
-        };
-
         let args = self
             .arguments
             .iter()
             .map(|expr| expr.evaluate(environment))
             .collect::<evaluate::Result<Vec<_>>>()?;
 
-        let mut extended_env = function.environment.extend();
+        let function = self.function.evaluate(environment)?;
+        match function {
+            Object::Function(function) => {
+                let mut extended_env = function.environment.extend();
 
-        for (index, param) in function.parameters.iter().enumerate() {
-            extended_env.set(param.name.clone(), args[index].clone())
-        }
+                for (index, param) in function.parameters.iter().enumerate() {
+                    extended_env.set(param.name.clone(), args[index].clone())
+                }
 
-        let evaluated = function.body.evaluate(&mut extended_env)?;
-        match &evaluated {
-            Object::Return(obj) => Ok(*obj.clone()),
-            _ => Ok(evaluated.clone()),
+                let evaluated = function.body.evaluate(&mut extended_env)?;
+                match &evaluated {
+                    Object::Return(obj) => Ok(*obj.clone()),
+                    _ => Ok(evaluated.clone()),
+                }
+            }
+            Object::Builtin(builtin) => builtin.execute(args),
+            _ => Err(evaluate::Error::NotAFunction(
+                function.data_type().to_string(),
+            )),
         }
     }
 }

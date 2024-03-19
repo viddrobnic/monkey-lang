@@ -1,4 +1,40 @@
-use crate::{ast, evaluate::Environment};
+use crate::{ast, evaluate, evaluate::Environment};
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum BuiltinFunction {
+    Len,
+}
+
+impl BuiltinFunction {
+    pub fn from_ident(ident: &str) -> Option<Self> {
+        match ident {
+            "len" => Some(Self::Len),
+            _ => None,
+        }
+    }
+
+    pub fn execute(&self, args: Vec<Object>) -> evaluate::Result<Object> {
+        match self {
+            BuiltinFunction::Len => Self::execute_len(args),
+        }
+    }
+
+    fn execute_len(args: Vec<Object>) -> evaluate::Result<Object> {
+        if args.len() != 1 {
+            return Err(evaluate::Error::WrongNumberOfArguments {
+                expected: 1,
+                got: args.len(),
+            });
+        }
+
+        match &args[0] {
+            Object::String(s) => Ok(Object::Integer(s.len() as i64)),
+            _ => Err(evaluate::Error::TypeMismatch(
+                args[0].data_type().to_string(),
+            )),
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Object {
@@ -7,6 +43,7 @@ pub enum Object {
     Boolean(bool),
     Return(Box<Object>),
     Function(FunctionObject),
+    Builtin(BuiltinFunction),
     Null,
 }
 
@@ -18,6 +55,7 @@ impl Object {
             Object::Boolean(b) => b.to_string(),
             Object::Return(o) => o.inspect(),
             Object::Function(fun) => fun.inspect(),
+            Object::Builtin(_) => "builtin function".to_string(),
             Object::Null => "null".to_string(),
         }
     }
@@ -33,6 +71,7 @@ impl Object {
             Object::Boolean(_) => "BOOLEAN",
             Object::Return(_) => "RETURN",
             Object::Function(_) => "FUNCTION",
+            Object::Builtin(_) => "BUILTIN",
             Object::Null => "NULL",
         }
     }

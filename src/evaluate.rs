@@ -14,6 +14,8 @@ pub enum Error {
     UnknownIdentifier(String),
     #[error("not a function: {0}")]
     NotAFunction(String),
+    #[error("wrong number of arguments: expected {expected}, got {got}")]
+    WrongNumberOfArguments { expected: usize, got: usize },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

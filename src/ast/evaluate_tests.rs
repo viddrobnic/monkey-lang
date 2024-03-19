@@ -299,3 +299,36 @@ fn test_closures() {
     let evaluated = ast.evaluate(&mut environment).unwrap();
     assert_eq!(evaluated, Object::Integer(4));
 }
+
+#[test]
+fn test_builtin_functions() {
+    let tests = [
+        ("len(\"\")", Ok(Object::Integer(0))),
+        ("len(\"four\")", Ok(Object::Integer(4))),
+        ("len(\"hello world\")", Ok(Object::Integer(11))),
+        ("len(1)", Err(Error::TypeMismatch("INTEGER".to_string()))),
+        (
+            "len(\"one\", \"two\")",
+            Err(Error::WrongNumberOfArguments {
+                expected: 1,
+                got: 2,
+            }),
+        ),
+        (
+            "len()",
+            Err(Error::WrongNumberOfArguments {
+                expected: 1,
+                got: 0,
+            }),
+        ),
+    ];
+
+    for (input, expected) in tests {
+        let mut parser = Parser::new(Lexer::new(input));
+        let ast = parser.parse_program().unwrap();
+
+        let mut environment = Environment::default();
+        let evaluated = ast.evaluate(&mut environment);
+        assert_eq!(evaluated, expected);
+    }
+}
