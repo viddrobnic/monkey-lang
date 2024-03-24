@@ -61,7 +61,7 @@ impl Clone for EnvironmentInner {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Environment(Rc<RefCell<EnvironmentInner>>);
 
 impl Environment {
@@ -93,16 +93,6 @@ impl Environment {
 impl Default for Environment {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl Clone for Environment {
-    /// Clones the environment and all of its values.
-    /// Acts as "clone by value" in contrast to the extend method
-    /// which acts as "clone by reference".
-    fn clone(&self) -> Self {
-        let env = (*self.0.borrow()).clone();
-        Environment(Rc::new(RefCell::new(env)))
     }
 }
 

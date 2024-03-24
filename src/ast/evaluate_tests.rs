@@ -462,3 +462,25 @@ fn test_array_index_expressions() {
         assert_eq!(evaluated, expected);
     }
 }
+
+#[test]
+fn test_recursion() {
+    let input = r#"
+        let fibonacci = fn(x) {
+            if (x < 3) {
+                return 1;
+            } else {
+                return fibonacci(x - 1) + fibonacci(x - 2);
+            }
+        };
+
+        fibonacci(5);
+        "#;
+
+    let mut parser = Parser::new(Lexer::new(input));
+    let ast = parser.parse_program().unwrap();
+
+    let mut environment = Environment::default();
+    let evaluated = ast.evaluate(&mut environment).unwrap();
+    assert_eq!(evaluated, Object::Integer(5));
+}

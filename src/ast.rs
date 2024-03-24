@@ -59,9 +59,8 @@ impl Evaluate for AST {
         for stmt in &self.statements {
             res = stmt.evaluate(environment)?;
 
-            match res {
-                Object::Return(obj) => return Ok(*obj),
-                _ => (),
+            if let Object::Return(obj) = res {
+                return Ok(*obj);
             }
         }
 
