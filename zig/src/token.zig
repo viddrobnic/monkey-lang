@@ -1,6 +1,8 @@
 const std = @import("std");
 
 pub const Token = union(enum) {
+    const Self = @This();
+
     illegal: u8,
     eof,
     // Identifiers + literals
@@ -44,5 +46,12 @@ pub const Token = union(enum) {
             .{ "else", .else_token },
         });
         return map.get(ident);
+    }
+
+    pub fn isInfix(self: Self) bool {
+        return switch (self) {
+            .plus, .minus, .slash, .asterisk, .eq, .not_eq, .lt, .gt, .lparen => true,
+            else => false,
+        };
     }
 };

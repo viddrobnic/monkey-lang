@@ -61,7 +61,7 @@ pub const LetStatement = struct {
     const Self = @This();
 
     name: []const u8,
-    value: *Expression,
+    value: Expression,
 
     pub fn string(self: Self, writer: anytype) anyerror!void {
         try std.fmt.format(writer, "let {s} = ", .{self.name});
@@ -72,14 +72,13 @@ pub const LetStatement = struct {
     pub fn deinit(self: *const Self, allocator: Allocator) void {
         allocator.free(self.name);
         self.value.deinit(allocator);
-        allocator.destroy(self.value);
     }
 };
 
 pub const ReturnStatement = struct {
     const Self = @This();
 
-    value: *Expression,
+    value: Expression,
 
     pub fn string(self: Self, writer: anytype) anyerror!void {
         try writer.writeAll("return ");
@@ -89,7 +88,6 @@ pub const ReturnStatement = struct {
 
     pub fn deinit(self: *const Self, allocator: Allocator) void {
         self.value.deinit(allocator);
-        allocator.destroy(self.value);
     }
 };
 
@@ -320,12 +318,13 @@ test "program to string" {
     };
     defer program.statements.deinit();
 
-    var another = Expression{
-        .identifier = "anotherVar",
-    };
-
     try program.statements.append(.{
-        .let_stmt = LetStatement{ .name = "myVar", .value = &another },
+        .let_stmt = LetStatement{
+            .name = "myVar",
+            .value = .{
+                .identifier = "anotherVar",
+            },
+        },
     });
 
     var res = std.ArrayList(u8).init(t.allocator);
