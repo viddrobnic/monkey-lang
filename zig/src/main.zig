@@ -1,6 +1,7 @@
 const std = @import("std");
 const token = @import("token.zig");
 const lexer = @import("lexer.zig");
+const ast = @import("ast.zig");
 
 pub fn main() !void {
     // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
@@ -21,4 +22,5 @@ pub fn main() !void {
 test {
     _ = @import("token.zig");
     _ = @import("lexer.zig");
+    _ = @import("ast.zig");
 }
