@@ -212,6 +212,7 @@ const Parser = struct {
             },
             .lparen => return self.parseGrouped(),
             .if_token => return self.parseIfExpression(),
+            .function => return self.parseFunctionLiteral(),
             else => return ParseError.NotAnExpression,
         }
     }
@@ -310,6 +311,66 @@ const Parser = struct {
         if_expr.condition.* = condition;
 
         return ast.Expression{ .if_expression = if_expr };
+    }
+
+    fn parseFunctionParameters(self: *Self) ParseError!std.ArrayList([]const u8) {
+        var parameters = std.ArrayList([]const u8).init(self.allocator);
+
+        self.step();
+        if (self.current_token == .rparen) {
+            return parameters;
+        }
+
+        switch (self.current_token) {
+            .ident => |name_ref| {
+                const name = try self.allocator.alloc(u8, name_ref.len);
+                @memcpy(name, name_ref);
+                try parameters.append(name);
+            },
+            else => return ParseError.UnexpectedToken,
+        }
+
+        while (self.peek_token == .comma) {
+            self.step();
+            self.step();
+
+            switch (self.current_token) {
+                .ident => |name_ref| {
+                    const name = try self.allocator.alloc(u8, name_ref.len);
+                    @memcpy(name, name_ref);
+                    try parameters.append(name);
+                },
+                else => return ParseError.UnexpectedToken,
+            }
+        }
+
+        if (self.peek_token != .rparen) {
+            return ParseError.UnexpectedToken;
+        }
+        self.step();
+
+        return parameters;
+    }
+
+    fn parseFunctionLiteral(self: *Self) ParseError!ast.Expression {
+        if (self.peek_token != .lparen) {
+            return ParseError.UnexpectedToken;
+        }
+        self.step();
+
+        const parameters = try self.parseFunctionParameters();
+
+        if (self.peek_token != .lsquigly) {
+            return ParseError.UnexpectedToken;
+        }
+        self.step();
+
+        const body = try self.parseBlockStatement();
+
+        return ast.Expression{ .function_literal = .{
+            .parameters = parameters,
+            .body = body,
+        } };
     }
 };
 
@@ -639,6 +700,65 @@ test "Parser: if else expressions" {
             },
         },
     } }, program.statements.items[0]);
+}
+
+test "Parser: function literal" {
+    const t = std.testing;
+    const input = "fn(x, y) { x + y; }";
+
+    const program = try parse(input, t.allocator);
+    defer program.deinit(t.allocator);
+
+    try t.expectEqual(1, program.statements.items.len);
+    const if_expr = program.statements.items[0].expression_stmt.function_literal;
+
+    try t.expectEqual(2, if_expr.parameters.items.len);
+    try t.expectEqualStrings("x", if_expr.parameters.items[0]);
+    try t.expectEqualStrings("y", if_expr.parameters.items[1]);
+
+    try t.expectEqual(1, if_expr.body.statements.items.len);
+
+    var left = ast.Expression{ .identifier = "x" };
+    var right = ast.Expression{ .identifier = "y" };
+    try t.expectEqualDeep(ast.Statement{ .expression_stmt = .{
+        .infix_operator = ast.InfixOperator{
+            .operator = .add,
+            .left = &left,
+            .right = &right,
+        },
+    } }, if_expr.body.statements.items[0]);
+}
+
+test "Parser: function parameters" {
+    const t = std.testing;
+    const Test = struct {
+        input: []const u8,
+        expected_parameters: []const []const u8,
+    };
+
+    const tests = [_]Test{ .{
+        .input = "fn() {}",
+        .expected_parameters = &[_][]const u8{},
+    }, .{
+        .input = "fn(x) {}",
+        .expected_parameters = &[_][]const u8{"x"},
+    }, .{
+        .input = "fn(x, y, z) {}",
+        .expected_parameters = &[_][]const u8{ "x", "y", "z" },
+    } };
+
+    for (tests) |tt| {
+        const program = try parse(tt.input, t.allocator);
+        defer program.deinit(t.allocator);
+
+        try t.expectEqual(1, program.statements.items.len);
+        const if_expr = program.statements.items[0].expression_stmt.function_literal;
+
+        try t.expectEqual(tt.expected_parameters.len, if_expr.parameters.items.len);
+        for (tt.expected_parameters, if_expr.parameters.items) |expected, got| {
+            try t.expectEqualStrings(expected, got);
+        }
+    }
 }
 
 test "Parser: operator precedence" {
