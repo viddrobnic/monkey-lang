@@ -73,6 +73,7 @@ const Parser = struct {
         var program = ast.Program{
             .statements = std.ArrayList(ast.Statement).init(self.allocator),
         };
+        errdefer program.deinit(self.allocator);
 
         while (self.current_token != .eof) {
             const stmt = try self.parseStatement();
@@ -154,6 +155,12 @@ const Parser = struct {
         self.step();
 
         var statements = std.ArrayList(ast.Statement).init(self.allocator);
+        errdefer {
+            for (statements.items) |stmt| {
+                stmt.deinit(self.allocator);
+            }
+            statements.deinit();
+        }
 
         while (self.current_token != .rsquigly and self.current_token != .eof) {
             const stmt = try self.parseStatement();
@@ -255,6 +262,12 @@ const Parser = struct {
 
     fn parseExpressionList(self: *Self, end: Token) ParseError!std.ArrayList(ast.Expression) {
         var list = std.ArrayList(ast.Expression).init(self.allocator);
+        errdefer {
+            for (list.items) |exp| {
+                exp.deinit(self.allocator);
+            }
+            list.deinit();
+        }
 
         self.step();
         if (@intFromEnum(self.current_token) == @intFromEnum(end)) {
@@ -350,6 +363,12 @@ const Parser = struct {
 
     fn parseFunctionParameters(self: *Self) ParseError!std.ArrayList([]const u8) {
         var parameters = std.ArrayList([]const u8).init(self.allocator);
+        errdefer {
+            for (parameters.items) |param| {
+                self.allocator.free(param);
+            }
+            parameters.deinit();
+        }
 
         self.step();
         if (self.current_token == .rparen) {
@@ -394,6 +413,12 @@ const Parser = struct {
         self.step();
 
         const parameters = try self.parseFunctionParameters();
+        errdefer {
+            for (parameters.items) |param| {
+                self.allocator.free(param);
+            }
+            parameters.deinit();
+        }
 
         if (self.peek_token != .lsquigly) {
             return ParseError.UnexpectedToken;
@@ -897,23 +922,15 @@ test "Parser: operator precedence" {
         .{ .input = "2 / (5 + 5)", .expected = "(2 / (5 + 5));" },
         .{ .input = "-(5 + 5)", .expected = "(-(5 + 5));" },
         .{ .input = "!(true == true)", .expected = "(!(true == true));" },
-        // .{ .input = "a + add(b*c) + d", .expected = "((a + add((b * c))) + d)" },
-        // .{
-        //     .input = "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))",
-        //     .expected = "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))",
-        // },
-        // .{
-        //     .input = "add(a + b + c * d / f + g)",
-        //     .expected = "add((((a + b) + ((c * d) / f)) + g))",
-        // },
-        // .{
-        //     .input = "a * [1, 2, 3, 4][b * c] * d",
-        //     .expected = "((a * ([1, 2, 3, 4][(b * c)])) * d)",
-        // },
-        // .{
-        //     .input = "add(a * b[2], b[1], 2 * [1, 2][1])",
-        //     .expected = "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))",
-        // },
+        .{ .input = "a + add(b*c) + d", .expected = "((a + add((b * c))) + d);" },
+        .{
+            .input = "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))",
+            .expected = "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)));",
+        },
+        .{
+            .input = "add(a + b + c * d / f + g)",
+            .expected = "add((((a + b) + ((c * d) / f)) + g));",
+        },
     };
 
     for (tests) |tt| {
@@ -928,9 +945,9 @@ test "Parser: operator precedence" {
     }
 }
 
-// test "Parser: cleanup on error" {
-//     const t = std.testing;
-//
-//     const res = parse("fn(a, b, c){let b c}", t.allocator);
-//     try t.expectError(ParseError.UnexpectedToken, res);
-// }
+test "Parser: cleanup on error" {
+    const t = std.testing;
+
+    const res = parse("fn(a, b, c){let b c}", t.allocator);
+    try t.expectError(ParseError.UnexpectedToken, res);
+}
