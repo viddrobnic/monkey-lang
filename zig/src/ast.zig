@@ -55,6 +55,14 @@ pub const Statement = union(enum) {
             .expression_stmt => self.expression_stmt.deinit(allocator),
         }
     }
+
+    pub fn clone(self: Self, allocator: Allocator) Allocator.Error!Statement {
+        return switch (self) {
+            .let_stmt => |stmt| Self{ .let_stmt = try stmt.clone(allocator) },
+            .return_stmt => |stmt| Self{ .return_stmt = try stmt.clone(allocator) },
+            .expression_stmt => |stmt| Self{ .expression_stmt = try stmt.clone(allocator) },
+        };
+    }
 };
 
 pub const LetStatement = struct {
@@ -73,6 +81,18 @@ pub const LetStatement = struct {
         allocator.free(self.name);
         self.value.deinit(allocator);
     }
+
+    pub fn clone(self: Self, allocator: Allocator) Allocator.Error!Self {
+        const name = try allocator.alloc(u8, self.name.len);
+        errdefer allocator.free(name);
+
+        @memcpy(name, self.name);
+
+        return Self{
+            .name = name,
+            .value = try self.value.clone(allocator),
+        };
+    }
 };
 
 pub const ReturnStatement = struct {
@@ -88,6 +108,10 @@ pub const ReturnStatement = struct {
 
     pub fn deinit(self: *const Self, allocator: Allocator) void {
         self.value.deinit(allocator);
+    }
+
+    pub fn clone(self: Self, allocator: Allocator) Allocator.Error!Self {
+        return Self{ .value = try self.value.clone(allocator) };
     }
 };
 
@@ -107,6 +131,17 @@ pub const BlockStatement = struct {
             item.deinit(allocator);
         }
         self.statements.deinit();
+    }
+
+    pub fn clone(self: Self, allocator: Allocator) Allocator.Error!Self {
+        var res = Self{ .statements = try std.ArrayList(Statement).initCapacity(allocator, self.statements.items.len) };
+        errdefer res.deinit(allocator);
+
+        for (self.statements.items) |stmt| {
+            try res.statements.append(try stmt.clone(allocator));
+        }
+
+        return res;
     }
 };
 
@@ -146,6 +181,24 @@ pub const Expression = union(enum) {
             else => {},
         }
     }
+
+    pub fn clone(self: Self, allocator: Allocator) Allocator.Error!Self {
+        return switch (self) {
+            .identifier => |val| blk: {
+                const ident = try allocator.alloc(u8, val.len);
+                @memcpy(ident, val);
+
+                break :blk Self{ .identifier = ident };
+            },
+            .integer_literal => |val| .{ .integer_literal = val },
+            .boolean_literal => |val| .{ .boolean_literal = val },
+            .prefix_operator => |val| .{ .prefix_operator = try val.clone(allocator) },
+            .infix_operator => |val| .{ .infix_operator = try val.clone(allocator) },
+            .if_expression => |val| .{ .if_expression = try val.clone(allocator) },
+            .function_literal => |val| .{ .function_literal = try val.clone(allocator) },
+            .function_call => |val| .{ .function_call = try val.clone(allocator) },
+        };
+    }
 };
 
 pub const PrefixOperatorKind = enum {
@@ -174,6 +227,18 @@ pub const PrefixOperator = struct {
     pub fn deinit(self: *const Self, allocator: Allocator) void {
         self.right.deinit(allocator);
         allocator.destroy(self.right);
+    }
+
+    pub fn clone(self: Self, allocator: Allocator) Allocator.Error!Self {
+        const right = try allocator.create(Expression);
+        errdefer allocator.destroy(right);
+
+        right.* = try self.right.clone(allocator);
+
+        return Self{
+            .operator = self.operator,
+            .right = right,
+        };
     }
 };
 
@@ -221,6 +286,25 @@ pub const InfixOperator = struct {
         self.right.deinit(allocator);
         allocator.destroy(self.right);
     }
+
+    pub fn clone(self: Self, allocator: Allocator) Allocator.Error!Self {
+        const left = try allocator.create(Expression);
+        errdefer allocator.destroy(left);
+
+        left.* = try self.left.clone(allocator);
+        errdefer left.deinit(allocator);
+
+        const right = try allocator.create(Expression);
+        errdefer allocator.destroy(right);
+
+        right.* = try self.right.clone(allocator);
+
+        return Self{
+            .operator = self.operator,
+            .left = left,
+            .right = right,
+        };
+    }
 };
 
 pub const IfExpression = struct {
@@ -245,6 +329,20 @@ pub const IfExpression = struct {
 
         self.consequence.deinit(allocator);
         self.alternative.deinit(allocator);
+    }
+
+    pub fn clone(self: Self, allocator: Allocator) Allocator.Error!Self {
+        const condition = try allocator.create(Expression);
+        errdefer allocator.destroy(condition);
+
+        condition.* = try self.condition.clone(allocator);
+        errdefer condition.deinit(allocator);
+
+        return Self{
+            .condition = condition,
+            .consequence = try self.consequence.clone(allocator),
+            .alternative = try self.alternative.clone(allocator),
+        };
     }
 };
 
@@ -277,6 +375,27 @@ pub const FunctionLiteral = struct {
 
         self.body.deinit(allocator);
     }
+
+    pub fn clone(self: Self, allocator: Allocator) Allocator.Error!Self {
+        var params = try std.ArrayList([]const u8).initCapacity(allocator, self.parameters.items.len);
+        errdefer {
+            for (params.items) |param| {
+                allocator.free(param);
+            }
+            params.deinit();
+        }
+
+        for (self.parameters.items) |param| {
+            const p = try allocator.alloc(u8, param.len);
+            @memcpy(p, param);
+            try params.append(p);
+        }
+
+        return Self{
+            .parameters = params,
+            .body = try self.body.clone(allocator),
+        };
+    }
 };
 
 pub const FunctionCall = struct {
@@ -307,6 +426,31 @@ pub const FunctionCall = struct {
             arg.deinit(allocator);
         }
         self.arguments.deinit();
+    }
+
+    pub fn clone(self: Self, allocator: Allocator) Allocator.Error!Self {
+        const function = try allocator.create(Expression);
+        errdefer allocator.destroy(function);
+
+        function.* = try self.function.clone(allocator);
+        errdefer function.deinit(allocator);
+
+        var args = try std.ArrayList(Expression).initCapacity(allocator, self.arguments.items.len);
+        errdefer {
+            for (args.items) |arg| {
+                arg.deinit(allocator);
+            }
+            args.deinit();
+        }
+
+        for (self.arguments.items) |arg| {
+            try args.append(try arg.clone(allocator));
+        }
+
+        return Self{
+            .function = function,
+            .arguments = args,
+        };
     }
 };
 
@@ -344,4 +488,13 @@ test "bool expression to string" {
 
     _ = try exp.string(res.writer());
     try t.expectEqualStrings("true", res.items);
+}
+
+test "clone test" {
+    const t = std.testing;
+    const stmt = Statement{ .let_stmt = .{ .name = "x", .value = .{ .integer_literal = 42 } } };
+    const cloned_stmt = try stmt.clone(t.allocator);
+    defer cloned_stmt.deinit(t.allocator);
+
+    try t.expectEqualDeep(stmt, cloned_stmt);
 }
