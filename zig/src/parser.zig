@@ -238,8 +238,43 @@ const Parser = struct {
                 exp.infix_operator.right.* = right;
                 return exp;
             },
+            .lparen => {
+                const arguments = try self.parseExpressionList(.rparen);
+
+                const exp = ast.Expression{ .function_call = .{
+                    .function = try self.allocator.create(ast.Expression),
+                    .arguments = arguments,
+                } };
+                exp.function_call.function.* = left;
+
+                return exp;
+            },
             else => return ParseError.UnexpectedToken,
         }
+    }
+
+    fn parseExpressionList(self: *Self, end: Token) ParseError!std.ArrayList(ast.Expression) {
+        var list = std.ArrayList(ast.Expression).init(self.allocator);
+
+        self.step();
+        if (@intFromEnum(self.current_token) == @intFromEnum(end)) {
+            return list;
+        }
+
+        try list.append(try self.parseExpression(.lowest));
+
+        while (self.peek_token == .comma) {
+            self.step();
+            self.step();
+            try list.append(try self.parseExpression(.lowest));
+        }
+
+        if (@intFromEnum(self.peek_token) != @intFromEnum(end)) {
+            return ParseError.UnexpectedToken;
+        }
+        self.step();
+
+        return list;
     }
 
     fn parseGrouped(self: *Self) ParseError!ast.Expression {
@@ -761,6 +796,75 @@ test "Parser: function parameters" {
     }
 }
 
+test "Parser: function call expression" {
+    const t = std.testing;
+    const input = "add(1, 2*3, 4 + 5);";
+
+    const program = try parse(input, t.allocator);
+    defer program.deinit(t.allocator);
+
+    try t.expectEqual(1, program.statements.items.len);
+    const fn_call = program.statements.items[0].expression_stmt.function_call;
+
+    try t.expectEqualStrings("add", fn_call.function.identifier);
+
+    try t.expectEqual(3, fn_call.arguments.items.len);
+
+    var debug_str = std.ArrayList(u8).init(t.allocator);
+    defer debug_str.deinit();
+
+    try fn_call.arguments.items[0].string(debug_str.writer());
+    try t.expectEqualStrings("1", debug_str.items);
+
+    debug_str.clearAndFree();
+    try fn_call.arguments.items[1].string(debug_str.writer());
+    try t.expectEqualStrings("(2 * 3)", debug_str.items);
+
+    debug_str.clearAndFree();
+    try fn_call.arguments.items[2].string(debug_str.writer());
+    try t.expectEqualStrings("(4 + 5)", debug_str.items);
+}
+
+test "Parser: function call arguments" {
+    const t = std.testing;
+    const Test = struct {
+        input: []const u8,
+        expected_arguments: []const []const u8,
+    };
+
+    const tests = [_]Test{
+        .{
+            .input = "add();",
+            .expected_arguments = &[_][]const u8{},
+        },
+        .{
+            .input = "add(1);",
+            .expected_arguments = &[_][]const u8{"1"},
+        },
+        .{
+            .input = "add(1, 2 * 3, 4 + 5);",
+            .expected_arguments = &[_][]const u8{ "1", "(2 * 3)", "(4 + 5)" },
+        },
+    };
+
+    for (tests) |tt| {
+        const program = try parse(tt.input, t.allocator);
+        defer program.deinit(t.allocator);
+
+        try t.expectEqual(1, program.statements.items.len);
+        const fn_call = program.statements.items[0].expression_stmt.function_call;
+
+        try t.expectEqual(tt.expected_arguments.len, fn_call.arguments.items.len);
+        for (tt.expected_arguments, fn_call.arguments.items) |expected, got| {
+            var debug_str = std.ArrayList(u8).init(t.allocator);
+            defer debug_str.deinit();
+
+            try got.string(debug_str.writer());
+            try t.expectEqualStrings(expected, debug_str.items);
+        }
+    }
+}
+
 test "Parser: operator precedence" {
     const t = std.testing;
     const Test = struct {
@@ -823,3 +927,10 @@ test "Parser: operator precedence" {
         try t.expectEqualStrings(tt.expected, out.items);
     }
 }
+
+// test "Parser: cleanup on error" {
+//     const t = std.testing;
+//
+//     const res = parse("fn(a, b, c){let b c}", t.allocator);
+//     try t.expectError(ParseError.UnexpectedToken, res);
+// }
