@@ -75,7 +75,7 @@ const Parser = struct {
         };
 
         while (self.current_token != .eof) {
-            const stmt = try self.parseStatement(.lowest);
+            const stmt = try self.parseStatement();
             try program.statements.append(stmt);
 
             self.step();
@@ -84,15 +84,15 @@ const Parser = struct {
         return program;
     }
 
-    fn parseStatement(self: *Self, precedence: Precedence) ParseError!ast.Statement {
+    fn parseStatement(self: *Self) ParseError!ast.Statement {
         return switch (self.current_token) {
-            .let => self.parseLetStatement(precedence),
-            .return_token => self.parseReturnStatement(precedence),
-            else => return self.parseExpressionStatement(precedence),
+            .let => self.parseLetStatement(),
+            .return_token => self.parseReturnStatement(),
+            else => return self.parseExpressionStatement(),
         };
     }
 
-    fn parseLetStatement(self: *Self, precedence: Precedence) ParseError!ast.Statement {
+    fn parseLetStatement(self: *Self) ParseError!ast.Statement {
         const name_ref = switch (self.peek_token) {
             .ident => |name| name,
             else => return ParseError.UnexpectedToken,
@@ -105,7 +105,7 @@ const Parser = struct {
         self.step();
         self.step();
 
-        const value = try self.parseExpression(precedence);
+        const value = try self.parseExpression(.lowest);
 
         if (self.peek_token == .semicolon) {
             self.step();
@@ -122,10 +122,10 @@ const Parser = struct {
         };
     }
 
-    fn parseReturnStatement(self: *Self, precedence: Precedence) ParseError!ast.Statement {
+    fn parseReturnStatement(self: *Self) ParseError!ast.Statement {
         self.step();
 
-        const value = try self.parseExpression(precedence);
+        const value = try self.parseExpression(.lowest);
 
         if (self.peek_token == .semicolon) {
             self.step();
@@ -138,8 +138,8 @@ const Parser = struct {
         };
     }
 
-    fn parseExpressionStatement(self: *Self, precedence: Precedence) ParseError!ast.Statement {
-        const exp = try self.parseExpression(precedence);
+    fn parseExpressionStatement(self: *Self) ParseError!ast.Statement {
+        const exp = try self.parseExpression(.lowest);
 
         if (self.peek_token == .semicolon) {
             self.step();
@@ -147,6 +147,23 @@ const Parser = struct {
 
         return .{
             .expression_stmt = exp,
+        };
+    }
+
+    fn parseBlockStatement(self: *Self) ParseError!ast.BlockStatement {
+        self.step();
+
+        var statements = std.ArrayList(ast.Statement).init(self.allocator);
+
+        while (self.current_token != .rsquigly and self.current_token != .eof) {
+            const stmt = try self.parseStatement();
+            try statements.append(stmt);
+
+            self.step();
+        }
+
+        return .{
+            .statements = statements,
         };
     }
 
@@ -194,6 +211,7 @@ const Parser = struct {
                 return exp;
             },
             .lparen => return self.parseGrouped(),
+            .if_token => return self.parseIfExpression(),
             else => return ParseError.NotAnExpression,
         }
     }
@@ -234,6 +252,64 @@ const Parser = struct {
 
         self.step();
         return exp;
+    }
+
+    fn parseIfExpression(self: *Self) ParseError!ast.Expression {
+        // Parse condition
+        if (self.peek_token != .lparen) {
+            return ParseError.UnexpectedToken;
+        }
+        self.step();
+        self.step();
+
+        const condition = try self.parseExpression(.lowest);
+
+        if (self.peek_token != .rparen) {
+            return ParseError.UnexpectedToken;
+        }
+        self.step();
+
+        // Parse consequence
+        if (self.peek_token != .lsquigly) {
+            return ParseError.UnexpectedToken;
+        }
+        self.step();
+
+        const consequence = try self.parseBlockStatement();
+
+        if (self.current_token != .rsquigly) {
+            return ParseError.UnexpectedToken;
+        }
+
+        // Parse alternative
+        var alternative: ast.BlockStatement = undefined;
+        if (self.peek_token == .else_token) {
+            self.step();
+
+            if (self.peek_token != .lsquigly) {
+                return ParseError.UnexpectedToken;
+            }
+            self.step();
+
+            alternative = try self.parseBlockStatement();
+
+            if (self.current_token != .rsquigly) {
+                return ParseError.UnexpectedToken;
+            }
+        } else {
+            alternative = ast.BlockStatement{
+                .statements = std.ArrayList(ast.Statement).init(self.allocator),
+            };
+        }
+
+        const if_expr = ast.IfExpression{
+            .condition = try self.allocator.create(ast.Expression),
+            .consequence = consequence,
+            .alternative = alternative,
+        };
+        if_expr.condition.* = condition;
+
+        return ast.Expression{ .if_expression = if_expr };
     }
 };
 
@@ -491,6 +567,78 @@ test "Parser: infix expressions" {
             },
         }, program.statements.items[0]);
     }
+}
+
+test "Parser: if expression" {
+    const t = std.testing;
+    const input = "if (x < y) { x }";
+
+    const program = try parse(input, t.allocator);
+    defer program.deinit(t.allocator);
+
+    try t.expectEqual(1, program.statements.items.len);
+
+    var left = ast.Expression{ .identifier = "x" };
+    var right = ast.Expression{ .identifier = "y" };
+    var condition = ast.Expression{ .infix_operator = .{
+        .operator = .less_than,
+        .left = &left,
+        .right = &right,
+    } };
+
+    var cons_statements = std.ArrayList(ast.Statement).init(t.allocator);
+    defer cons_statements.deinit();
+    try cons_statements.append(.{ .expression_stmt = .{ .identifier = "x" } });
+
+    try t.expectEqualDeep(ast.Statement{ .expression_stmt = .{
+        .if_expression = .{
+            .condition = &condition,
+            .consequence = .{
+                .statements = cons_statements,
+            },
+            .alternative = .{
+                .statements = std.ArrayList(ast.Statement).init(t.allocator),
+            },
+        },
+    } }, program.statements.items[0]);
+}
+
+test "Parser: if else expressions" {
+    const t = std.testing;
+    const input = "if (x < y) { x } else {y}";
+
+    const program = try parse(input, t.allocator);
+    defer program.deinit(t.allocator);
+
+    try t.expectEqual(1, program.statements.items.len);
+
+    var left = ast.Expression{ .identifier = "x" };
+    var right = ast.Expression{ .identifier = "y" };
+    var condition = ast.Expression{ .infix_operator = .{
+        .operator = .less_than,
+        .left = &left,
+        .right = &right,
+    } };
+
+    var cons_statements = std.ArrayList(ast.Statement).init(t.allocator);
+    defer cons_statements.deinit();
+    try cons_statements.append(.{ .expression_stmt = .{ .identifier = "x" } });
+
+    var alt_statements = std.ArrayList(ast.Statement).init(t.allocator);
+    defer alt_statements.deinit();
+    try alt_statements.append(.{ .expression_stmt = .{ .identifier = "y" } });
+
+    try t.expectEqualDeep(ast.Statement{ .expression_stmt = .{
+        .if_expression = .{
+            .condition = &condition,
+            .consequence = .{
+                .statements = cons_statements,
+            },
+            .alternative = .{
+                .statements = alt_statements,
+            },
+        },
+    } }, program.statements.items[0]);
 }
 
 test "Parser: operator precedence" {
