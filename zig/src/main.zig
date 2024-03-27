@@ -5,6 +5,7 @@ const ast = @import("ast.zig");
 const rc = @import("rc.zig");
 const object = @import("object.zig");
 const environment = @import("environment.zig");
+const evaluate = @import("evaluate.zig");
 
 pub fn main() !void {
     // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
@@ -30,4 +31,5 @@ test {
     _ = @import("rc.zig");
     _ = @import("object.zig");
     _ = @import("environment.zig");
+    _ = @import("evaluate.zig");
 }

@@ -3,12 +3,20 @@ const rc = @import("rc.zig");
 const ast = @import("ast.zig");
 const env = @import("environment.zig");
 
-pub const Object = union(enum) {
+pub const ObjectTag = enum {
+    integer,
+    boolean,
+    return_obj,
+    function_obj,
+    null_obj,
+};
+
+pub const Object = union(ObjectTag) {
     integer: i64,
     boolean: bool,
     return_obj: rc.Rc(Object),
     function_obj: FunctionObject,
-    null_obj,
+    null_obj: void,
 };
 
 pub const FunctionObject = struct {
