@@ -17,7 +17,14 @@ pub fn evaluate(program: ast.Program, environment: Rc(env.Environment), allocato
         obj.releaseObject(&result, allocator);
         result = new_result;
 
-        // TODO: Handle return statements
+        switch (result.value.*) {
+            .return_obj => |*inner| {
+                const inner_res = inner.retain();
+                obj.releaseObject(&result, allocator);
+                return inner_res;
+            },
+            else => {},
+        }
     }
 
     return result;
@@ -59,6 +66,7 @@ fn evaluateExpression(expression: ast.Expression, environment: Rc(env.Environmen
         .boolean_literal => |value| return try Rc(obj.Object).init(allocator, obj.Object{ .boolean = value }),
         .prefix_operator => |operator| return evaluatePrefixExpression(operator, environment, allocator),
         .infix_operator => |operator| return evaluateInfixExpression(operator, environment, allocator),
+        .if_expression => |if_expr| return evaluateIfExpression(if_expr, environment, allocator),
         else => unreachable,
     }
 }
@@ -130,6 +138,41 @@ fn evaluateInfixExpression(operator: ast.InfixOperator, environment: Rc(env.Envi
     }
 
     return EvaluateError.UnknownOperator;
+}
+
+fn evaluateIfExpression(if_expr: ast.IfExpression, environment: Rc(env.Environment), allocator: Allocator) EvaluateError!Rc(obj.Object) {
+    var condition = try evaluateExpression(if_expr.condition.*, environment, allocator);
+    defer obj.releaseObject(&condition, allocator);
+
+    const is_truthy = switch (condition.value.*) {
+        .boolean => condition.value.boolean,
+        .null_obj => false,
+        else => true,
+    };
+
+    if (is_truthy) {
+        return evaluateBlockStatement(if_expr.consequence, environment, allocator);
+    } else {
+        return evaluateBlockStatement(if_expr.alternative, environment, allocator);
+    }
+}
+
+fn evaluateBlockStatement(block: ast.BlockStatement, environment: Rc(env.Environment), allocator: Allocator) EvaluateError!Rc(obj.Object) {
+    var result = try Rc(obj.Object).init(allocator, .null_obj);
+    errdefer obj.releaseObject(&result, allocator);
+
+    for (block.statements.items) |statement| {
+        const new_result = try evaluateStatement(statement, environment, allocator);
+        obj.releaseObject(&result, allocator);
+        result = new_result;
+
+        switch (result.value.*) {
+            .return_obj => return result,
+            else => {},
+        }
+    }
+
+    return result;
 }
 
 test "Eval: integer" {
@@ -358,5 +401,99 @@ test "Eval: bang operator" {
         defer res.release();
 
         try t.expectEqual(obj.Object{ .boolean = tt.expected }, res.value.*);
+    }
+}
+
+test "Eval: if else expression" {
+    const t = std.testing;
+    const Test = struct {
+        input: []const u8,
+        expected: obj.Object,
+    };
+    const tests = [_]Test{
+        .{
+            .input = "if (true) { 10 }",
+            .expected = obj.Object{ .integer = 10 },
+        },
+        .{
+            .input = "if (false) { 10 }",
+            .expected = .null_obj,
+        },
+        .{
+            .input = "if (1) { 10 }",
+            .expected = obj.Object{ .integer = 10 },
+        },
+        .{
+            .input = "if (1 < 2) { 10 }",
+            .expected = obj.Object{ .integer = 10 },
+        },
+        .{
+            .input = "if (1 > 2) { 10 }",
+            .expected = .null_obj,
+        },
+        .{
+            .input = "if (1 > 2) { 10 } else { 20 }",
+            .expected = obj.Object{ .integer = 20 },
+        },
+        .{
+            .input = "if (1 < 2) { 10 } else { 20 }",
+            .expected = obj.Object{ .integer = 10 },
+        },
+    };
+
+    for (tests) |tt| {
+        const program = try parser.parse(tt.input, t.allocator);
+        defer program.deinit(t.allocator);
+
+        var environment = try env.Environment.init(t.allocator);
+        defer env.releaseEnvironment(&environment, t.allocator);
+
+        var res = try evaluate(program, environment, t.allocator);
+        defer obj.releaseObject(&res, t.allocator);
+
+        try t.expectEqual(tt.expected, res.value.*);
+    }
+}
+
+test "Eval: return" {
+    const t = std.testing;
+    const Test = struct {
+        input: []const u8,
+        expected: obj.Object,
+    };
+    const tests = [_]Test{
+        .{
+            .input = "return 10;",
+            .expected = obj.Object{ .integer = 10 },
+        },
+        .{
+            .input = "return 10; 9;",
+            .expected = obj.Object{ .integer = 10 },
+        },
+        .{
+            .input = "return 2 * 5; 9;",
+            .expected = obj.Object{ .integer = 10 },
+        },
+        .{
+            .input = "9; return 2 * 5; 9;",
+            .expected = obj.Object{ .integer = 10 },
+        },
+        .{
+            .input = "if (10 > 1) { if (10 > 1) { return 10; } return 1; }",
+            .expected = obj.Object{ .integer = 10 },
+        },
+    };
+
+    for (tests) |tt| {
+        const program = try parser.parse(tt.input, t.allocator);
+        defer program.deinit(t.allocator);
+
+        var environment = try env.Environment.init(t.allocator);
+        defer env.releaseEnvironment(&environment, t.allocator);
+
+        var res = try evaluate(program, environment, t.allocator);
+        defer obj.releaseObject(&res, t.allocator);
+
+        try t.expectEqual(tt.expected, res.value.*);
     }
 }
