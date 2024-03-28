@@ -67,6 +67,24 @@ fn evaluateExpression(expression: ast.Expression, environment: Rc(env.Environmen
         .prefix_operator => |operator| return evaluatePrefixExpression(operator, environment, allocator),
         .infix_operator => |operator| return evaluateInfixExpression(operator, environment, allocator),
         .if_expression => |if_expr| return evaluateIfExpression(if_expr, environment, allocator),
+        .function_literal => |function| {
+            var parameters = std.ArrayList([]const u8).init(allocator);
+            for (function.parameters.items) |param| {
+                const new_param = try allocator.alloc(u8, param.len);
+                @memcpy(new_param, param);
+
+                try parameters.append(new_param);
+            }
+
+            var new_env = environment;
+            const fn_obj = obj.FunctionObject{
+                .parameters = parameters,
+                .body = try function.body.clone(allocator),
+                .environment = new_env.downgrade(),
+            };
+
+            return try Rc(obj.Object).init(allocator, obj.Object{ .function_obj = fn_obj });
+        },
         else => unreachable,
     }
 }
@@ -535,4 +553,28 @@ test "Eval: let statements" {
 
         try t.expectEqual(tt.expected, res.value.*);
     }
+}
+
+test "Eval: function object" {
+    const t = std.testing;
+
+    const input = "fn(x) { x + 2; }";
+    const program = try parser.parse(input, t.allocator);
+    defer program.deinit(t.allocator);
+
+    var environment = try env.Environment.init(t.allocator);
+    defer env.releaseEnvironment(&environment, t.allocator);
+
+    var res = try evaluate(program, environment, t.allocator);
+    defer obj.releaseObject(&res, t.allocator);
+
+    const fn_obj = res.value.function_obj;
+    try t.expectEqual(1, fn_obj.parameters.items.len);
+    try t.expectEqualStrings("x", fn_obj.parameters.items[0]);
+
+    var debug_str = std.ArrayList(u8).init(t.allocator);
+    defer debug_str.deinit();
+    try fn_obj.body.string(debug_str.writer());
+
+    try t.expectEqualStrings("(x + 2);", debug_str.items);
 }
