@@ -55,11 +55,11 @@ fn evaluateLetStatement(statement: ast.LetStatement, environment: Rc(env.Environ
 fn evaluateExpression(expression: ast.Expression, environment: Rc(env.Environment), allocator: Allocator) EvaluateError!Rc(obj.Object) {
     switch (expression) {
         .identifier => |name| {
-            var res = environment.value.get(name);
+            const res = environment.value.get(name);
             if (res == null) {
                 return try Rc(obj.Object).init(allocator, .null_obj);
             } else {
-                return res.?.retain();
+                return res.?;
             }
         },
         .integer_literal => |value| return try Rc(obj.Object).init(allocator, obj.Object{ .integer = value }),
@@ -481,6 +481,45 @@ test "Eval: return" {
         .{
             .input = "if (10 > 1) { if (10 > 1) { return 10; } return 1; }",
             .expected = obj.Object{ .integer = 10 },
+        },
+    };
+
+    for (tests) |tt| {
+        const program = try parser.parse(tt.input, t.allocator);
+        defer program.deinit(t.allocator);
+
+        var environment = try env.Environment.init(t.allocator);
+        defer env.releaseEnvironment(&environment, t.allocator);
+
+        var res = try evaluate(program, environment, t.allocator);
+        defer obj.releaseObject(&res, t.allocator);
+
+        try t.expectEqual(tt.expected, res.value.*);
+    }
+}
+
+test "Eval: let statements" {
+    const t = std.testing;
+    const Test = struct {
+        input: []const u8,
+        expected: obj.Object,
+    };
+    const tests = [_]Test{
+        .{
+            .input = "let a = 5; a;",
+            .expected = obj.Object{ .integer = 5 },
+        },
+        .{
+            .input = "let a = 5 * 5; a;",
+            .expected = obj.Object{ .integer = 25 },
+        },
+        .{
+            .input = "let a = 5; let b = a; b;",
+            .expected = obj.Object{ .integer = 5 },
+        },
+        .{
+            .input = "let a = 5; let b = a; let c = a + b + 5; c;",
+            .expected = obj.Object{ .integer = 15 },
         },
     };
 
