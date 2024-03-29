@@ -70,10 +70,8 @@ const Parser = struct {
     }
 
     fn parseProgram(self: *Self) ParseError!ast.Program {
-        var program = ast.Program{
-            .statements = std.ArrayList(ast.Statement).init(self.allocator),
-        };
-        errdefer program.deinit(self.allocator);
+        var program = ast.Program.init(self.allocator);
+        errdefer program.deinit();
 
         while (self.current_token != .eof) {
             const stmt = try self.parseStatement();
@@ -112,14 +110,12 @@ const Parser = struct {
             self.step();
         }
 
-        const name = try self.allocator.alloc(u8, name_ref.len);
-        @memcpy(name, name_ref);
-
         return .{
-            .let_stmt = .{
-                .name = name,
-                .value = value,
-            },
+            .let_stmt = try ast.LetStatement.init(
+                self.allocator,
+                name_ref,
+                value,
+            ),
         };
     }
 
@@ -134,6 +130,7 @@ const Parser = struct {
 
         return .{
             .return_stmt = .{
+                .allocator = self.allocator,
                 .value = value,
             },
         };
@@ -154,24 +151,17 @@ const Parser = struct {
     fn parseBlockStatement(self: *Self) ParseError!ast.BlockStatement {
         self.step();
 
-        var statements = std.ArrayList(ast.Statement).init(self.allocator);
-        errdefer {
-            for (statements.items) |stmt| {
-                stmt.deinit(self.allocator);
-            }
-            statements.deinit();
-        }
+        var block_stmt = ast.BlockStatement.init(self.allocator);
+        errdefer block_stmt.deinit();
 
         while (self.current_token != .rsquigly and self.current_token != .eof) {
             const stmt = try self.parseStatement();
-            try statements.append(stmt);
+            try block_stmt.statements.append(stmt);
 
             self.step();
         }
 
-        return .{
-            .statements = statements,
-        };
+        return block_stmt;
     }
 
     fn parseExpression(self: *Self, precedence: Precedence) ParseError!ast.Expression {
@@ -196,9 +186,12 @@ const Parser = struct {
                 return .{ .integer_literal = number };
             },
             .ident => |name_ref| {
-                const name = try self.allocator.alloc(u8, name_ref.len);
-                @memcpy(name, name_ref);
-                return .{ .identifier = name };
+                return .{
+                    .identifier = try ast.Identifier.init(
+                        self.allocator,
+                        name_ref,
+                    ),
+                };
             },
             .true_token => return .{ .boolean_literal = true },
             .false_token => return .{ .boolean_literal = false },
@@ -207,15 +200,13 @@ const Parser = struct {
                 self.step();
 
                 const right = try self.parseExpression(.prefix);
-                const exp = ast.Expression{
-                    .prefix_operator = .{
-                        .operator = operator_kind,
-                        .right = try self.allocator.create(ast.Expression),
-                    },
-                };
-                exp.prefix_operator.right.* = right;
+                const prefix_operator = try ast.PrefixOperator.init(
+                    self.allocator,
+                    operator_kind,
+                    right,
+                );
 
-                return exp;
+                return .{ .prefix_operator = prefix_operator };
             },
             .lparen => return self.parseGrouped(),
             .if_token => return self.parseIfExpression(),
@@ -234,44 +225,33 @@ const Parser = struct {
 
                 const right = try self.parseExpression(precedence);
 
-                const exp = ast.Expression{
-                    .infix_operator = .{
-                        .operator = operator,
-                        .left = try self.allocator.create(ast.Expression),
-                        .right = try self.allocator.create(ast.Expression),
-                    },
-                };
-                exp.infix_operator.left.* = left;
-                exp.infix_operator.right.* = right;
-                return exp;
+                const infix_expr = try ast.InfixOperator.init(
+                    self.allocator,
+                    operator,
+                    left,
+                    right,
+                );
+                return .{ .infix_operator = infix_expr };
             },
             .lparen => {
-                const arguments = try self.parseExpressionList(.rparen);
+                var fn_call = try ast.FunctionCall.init(
+                    self.allocator,
+                    left,
+                );
+                errdefer fn_call.deinit();
 
-                const exp = ast.Expression{ .function_call = .{
-                    .function = try self.allocator.create(ast.Expression),
-                    .arguments = arguments,
-                } };
-                exp.function_call.function.* = left;
+                try self.parseExpressionList(&fn_call.arguments, .rparen);
 
-                return exp;
+                return .{ .function_call = fn_call };
             },
             else => return ParseError.UnexpectedToken,
         }
     }
 
-    fn parseExpressionList(self: *Self, end: Token) ParseError!std.ArrayList(ast.Expression) {
-        var list = std.ArrayList(ast.Expression).init(self.allocator);
-        errdefer {
-            for (list.items) |exp| {
-                exp.deinit(self.allocator);
-            }
-            list.deinit();
-        }
-
+    fn parseExpressionList(self: *Self, list: *std.ArrayList(ast.Expression), end: Token) ParseError!void {
         self.step();
         if (@intFromEnum(self.current_token) == @intFromEnum(end)) {
-            return list;
+            return;
         }
 
         try list.append(try self.parseExpression(.lowest));
@@ -287,7 +267,7 @@ const Parser = struct {
         }
         self.step();
 
-        return list;
+        return;
     }
 
     fn parseGrouped(self: *Self) ParseError!ast.Expression {
@@ -346,17 +326,10 @@ const Parser = struct {
                 return ParseError.UnexpectedToken;
             }
         } else {
-            alternative = ast.BlockStatement{
-                .statements = std.ArrayList(ast.Statement).init(self.allocator),
-            };
+            alternative = ast.BlockStatement.init(self.allocator);
         }
 
-        const if_expr = ast.IfExpression{
-            .condition = try self.allocator.create(ast.Expression),
-            .consequence = consequence,
-            .alternative = alternative,
-        };
-        if_expr.condition.* = condition;
+        const if_expr = try ast.IfExpression.init(self.allocator, condition, consequence, alternative);
 
         return ast.Expression{ .if_expression = if_expr };
     }
@@ -378,7 +351,10 @@ const Parser = struct {
         switch (self.current_token) {
             .ident => |name_ref| {
                 const name = try self.allocator.alloc(u8, name_ref.len);
+                errdefer self.allocator.free(name);
+
                 @memcpy(name, name_ref);
+
                 try parameters.append(name);
             },
             else => return ParseError.UnexpectedToken,
@@ -391,7 +367,10 @@ const Parser = struct {
             switch (self.current_token) {
                 .ident => |name_ref| {
                     const name = try self.allocator.alloc(u8, name_ref.len);
+                    errdefer self.allocator.free(name);
+
                     @memcpy(name, name_ref);
+
                     try parameters.append(name);
                 },
                 else => return ParseError.UnexpectedToken,
@@ -427,10 +406,13 @@ const Parser = struct {
 
         const body = try self.parseBlockStatement();
 
-        return ast.Expression{ .function_literal = .{
-            .parameters = parameters,
-            .body = body,
-        } };
+        const fn_literal = ast.FunctionLiteral.init(
+            self.allocator,
+            parameters,
+            body,
+        );
+
+        return ast.Expression{ .function_literal = fn_literal };
     }
 };
 
@@ -476,15 +458,16 @@ test "Parser: let statements" {
     }, .{
         .input = "let foobar = y",
         .expected_identifier = "foobar",
-        .expected_value = .{ .identifier = "y" },
+        .expected_value = .{ .identifier = ast.Identifier{ .allocator = testing.allocator, .name = "y" } },
     } };
 
     for (input) |t| {
         const program = try parse(t.input, testing.allocator);
-        defer program.deinit(testing.allocator);
+        defer program.deinit();
 
         try testing.expectEqual(1, program.statements.items.len);
         try testing.expectEqualDeep(ast.Statement{ .let_stmt = .{
+            .allocator = testing.allocator,
             .name = t.expected_identifier,
             .value = t.expected_value,
         } }, program.statements.items[0]);
@@ -521,18 +504,18 @@ test "Parser: invalid let statement" {
 test "Parser: identifier expression" {
     const testing = std.testing;
     const program = try parse("foobar;", testing.allocator);
-    defer program.deinit(testing.allocator);
+    defer program.deinit();
 
     try testing.expectEqual(1, program.statements.items.len);
     try testing.expectEqualDeep(ast.Statement{ .expression_stmt = .{
-        .identifier = "foobar",
+        .identifier = ast.Identifier{ .allocator = testing.allocator, .name = "foobar" },
     } }, program.statements.items[0]);
 }
 
 test "Parser: integer literal expression" {
     const testing = std.testing;
     const program = try parse("5;", testing.allocator);
-    defer program.deinit(testing.allocator);
+    defer program.deinit();
 
     try testing.expectEqual(1, program.statements.items.len);
     try testing.expectEqualDeep(ast.Statement{ .expression_stmt = .{
@@ -543,7 +526,7 @@ test "Parser: integer literal expression" {
 test "Parser: boolean (true) literal expression" {
     const testing = std.testing;
     const program = try parse("true;", testing.allocator);
-    defer program.deinit(testing.allocator);
+    defer program.deinit();
 
     try testing.expectEqual(1, program.statements.items.len);
     try testing.expectEqualDeep(ast.Statement{ .expression_stmt = .{
@@ -554,7 +537,7 @@ test "Parser: boolean (true) literal expression" {
 test "Parser: boolean (false) literal expression" {
     const testing = std.testing;
     const program = try parse("false;", testing.allocator);
-    defer program.deinit(testing.allocator);
+    defer program.deinit();
 
     try testing.expectEqual(1, program.statements.items.len);
     try testing.expectEqualDeep(ast.Statement{ .expression_stmt = .{
@@ -596,13 +579,14 @@ test "Parser: prefix expressions" {
 
     for (tests) |tt| {
         const program = try parse(tt.input, t.allocator);
-        defer program.deinit(t.allocator);
+        defer program.deinit();
 
         var exp = tt.expected_right;
 
         try t.expectEqual(1, program.statements.items.len);
         try t.expectEqualDeep(ast.Statement{ .expression_stmt = .{
             .prefix_operator = .{
+                .allocator = t.allocator,
                 .operator = tt.expected_operator,
                 .right = &exp,
             },
@@ -672,7 +656,7 @@ test "Parser: infix expressions" {
 
     for (tests) |tt| {
         const program = try parse(tt.input, t.allocator);
-        defer program.deinit(t.allocator);
+        defer program.deinit();
 
         var left = tt.expected_left;
         var right = tt.expected_right;
@@ -681,6 +665,7 @@ test "Parser: infix expressions" {
         try t.expectEqualDeep(ast.Statement{
             .expression_stmt = .{
                 .infix_operator = .{
+                    .allocator = t.allocator,
                     .operator = tt.expected_operator,
                     .left = &left,
                     .right = &right,
@@ -695,13 +680,18 @@ test "Parser: if expression" {
     const input = "if (x < y) { x }";
 
     const program = try parse(input, t.allocator);
-    defer program.deinit(t.allocator);
+    defer program.deinit();
 
     try t.expectEqual(1, program.statements.items.len);
 
-    var left = ast.Expression{ .identifier = "x" };
-    var right = ast.Expression{ .identifier = "y" };
+    var left = ast.Expression{
+        .identifier = ast.Identifier{ .allocator = t.allocator, .name = "x" },
+    };
+    var right = ast.Expression{
+        .identifier = ast.Identifier{ .allocator = t.allocator, .name = "y" },
+    };
     var condition = ast.Expression{ .infix_operator = .{
+        .allocator = t.allocator,
         .operator = .less_than,
         .left = &left,
         .right = &right,
@@ -709,15 +699,18 @@ test "Parser: if expression" {
 
     var cons_statements = std.ArrayList(ast.Statement).init(t.allocator);
     defer cons_statements.deinit();
-    try cons_statements.append(.{ .expression_stmt = .{ .identifier = "x" } });
+    try cons_statements.append(.{ .expression_stmt = .{ .identifier = .{ .allocator = t.allocator, .name = "x" } } });
 
     try t.expectEqualDeep(ast.Statement{ .expression_stmt = .{
         .if_expression = .{
+            .allocator = t.allocator,
             .condition = &condition,
             .consequence = .{
+                .allocator = t.allocator,
                 .statements = cons_statements,
             },
             .alternative = .{
+                .allocator = t.allocator,
                 .statements = std.ArrayList(ast.Statement).init(t.allocator),
             },
         },
@@ -729,13 +722,14 @@ test "Parser: if else expressions" {
     const input = "if (x < y) { x } else {y}";
 
     const program = try parse(input, t.allocator);
-    defer program.deinit(t.allocator);
+    defer program.deinit();
 
     try t.expectEqual(1, program.statements.items.len);
 
-    var left = ast.Expression{ .identifier = "x" };
-    var right = ast.Expression{ .identifier = "y" };
+    var left = ast.Expression{ .identifier = .{ .allocator = t.allocator, .name = "x" } };
+    var right = ast.Expression{ .identifier = .{ .allocator = t.allocator, .name = "y" } };
     var condition = ast.Expression{ .infix_operator = .{
+        .allocator = t.allocator,
         .operator = .less_than,
         .left = &left,
         .right = &right,
@@ -743,19 +737,22 @@ test "Parser: if else expressions" {
 
     var cons_statements = std.ArrayList(ast.Statement).init(t.allocator);
     defer cons_statements.deinit();
-    try cons_statements.append(.{ .expression_stmt = .{ .identifier = "x" } });
+    try cons_statements.append(.{ .expression_stmt = .{ .identifier = .{ .allocator = t.allocator, .name = "x" } } });
 
     var alt_statements = std.ArrayList(ast.Statement).init(t.allocator);
     defer alt_statements.deinit();
-    try alt_statements.append(.{ .expression_stmt = .{ .identifier = "y" } });
+    try alt_statements.append(.{ .expression_stmt = .{ .identifier = .{ .allocator = t.allocator, .name = "y" } } });
 
     try t.expectEqualDeep(ast.Statement{ .expression_stmt = .{
         .if_expression = .{
+            .allocator = t.allocator,
             .condition = &condition,
             .consequence = .{
+                .allocator = t.allocator,
                 .statements = cons_statements,
             },
             .alternative = .{
+                .allocator = t.allocator,
                 .statements = alt_statements,
             },
         },
@@ -767,7 +764,7 @@ test "Parser: function literal" {
     const input = "fn(x, y) { x + y; }";
 
     const program = try parse(input, t.allocator);
-    defer program.deinit(t.allocator);
+    defer program.deinit();
 
     try t.expectEqual(1, program.statements.items.len);
     const if_expr = program.statements.items[0].expression_stmt.function_literal;
@@ -778,10 +775,11 @@ test "Parser: function literal" {
 
     try t.expectEqual(1, if_expr.body.statements.items.len);
 
-    var left = ast.Expression{ .identifier = "x" };
-    var right = ast.Expression{ .identifier = "y" };
+    var left = ast.Expression{ .identifier = .{ .allocator = t.allocator, .name = "x" } };
+    var right = ast.Expression{ .identifier = .{ .allocator = t.allocator, .name = "y" } };
     try t.expectEqualDeep(ast.Statement{ .expression_stmt = .{
         .infix_operator = ast.InfixOperator{
+            .allocator = t.allocator,
             .operator = .add,
             .left = &left,
             .right = &right,
@@ -809,7 +807,7 @@ test "Parser: function parameters" {
 
     for (tests) |tt| {
         const program = try parse(tt.input, t.allocator);
-        defer program.deinit(t.allocator);
+        defer program.deinit();
 
         try t.expectEqual(1, program.statements.items.len);
         const if_expr = program.statements.items[0].expression_stmt.function_literal;
@@ -826,12 +824,12 @@ test "Parser: function call expression" {
     const input = "add(1, 2*3, 4 + 5);";
 
     const program = try parse(input, t.allocator);
-    defer program.deinit(t.allocator);
+    defer program.deinit();
 
     try t.expectEqual(1, program.statements.items.len);
     const fn_call = program.statements.items[0].expression_stmt.function_call;
 
-    try t.expectEqualStrings("add", fn_call.function.identifier);
+    try t.expectEqualStrings("add", fn_call.function.identifier.name);
 
     try t.expectEqual(3, fn_call.arguments.items.len);
 
@@ -874,7 +872,7 @@ test "Parser: function call arguments" {
 
     for (tests) |tt| {
         const program = try parse(tt.input, t.allocator);
-        defer program.deinit(t.allocator);
+        defer program.deinit();
 
         try t.expectEqual(1, program.statements.items.len);
         const fn_call = program.statements.items[0].expression_stmt.function_call;
@@ -935,7 +933,7 @@ test "Parser: operator precedence" {
 
     for (tests) |tt| {
         const program = try parse(tt.input, t.allocator);
-        defer program.deinit(t.allocator);
+        defer program.deinit();
 
         var out = std.ArrayList(u8).init(t.allocator);
         defer out.deinit();
