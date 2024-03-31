@@ -20,7 +20,7 @@ pub const Program = struct {
         }
     }
 
-    pub fn deinit(self: *const Self) void {
+    pub fn deinit(self: Self) void {
         for (self.statements.items) |item| {
             item.deinit();
         }
@@ -47,8 +47,8 @@ pub const Statement = union(enum) {
         };
     }
 
-    pub fn deinit(self: *const Self) void {
-        switch (self.*) {
+    pub fn deinit(self: Self) void {
+        switch (self) {
             .let_stmt => self.let_stmt.deinit(),
             .return_stmt => self.return_stmt.deinit(),
             .expression_stmt => self.expression_stmt.deinit(),
@@ -89,7 +89,7 @@ pub const LetStatement = struct {
         try writer.writeAll(";");
     }
 
-    pub fn deinit(self: *const Self) void {
+    pub fn deinit(self: Self) void {
         self.allocator.free(self.name);
         self.value.deinit();
     }
@@ -121,7 +121,7 @@ pub const ReturnStatement = struct {
         try writer.writeAll(";");
     }
 
-    pub fn deinit(self: *const Self) void {
+    pub fn deinit(self: Self) void {
         self.value.deinit();
     }
 
@@ -153,7 +153,7 @@ pub const BlockStatement = struct {
         }
     }
 
-    pub fn deinit(self: *const Self) void {
+    pub fn deinit(self: Self) void {
         for (self.statements.items) |item| {
             item.deinit();
         }
@@ -203,8 +203,8 @@ pub const Expression = union(enum) {
         };
     }
 
-    pub fn deinit(self: *const Self) void {
-        switch (self.*) {
+    pub fn deinit(self: Self) void {
+        switch (self) {
             .identifier => self.identifier.deinit(),
             .prefix_operator => self.prefix_operator.deinit(),
             .infix_operator => self.infix_operator.deinit(),
@@ -250,7 +250,7 @@ pub const Identifier = struct {
         return Self.init(self.allocator, self.name);
     }
 
-    pub fn deinit(self: *const Self) void {
+    pub fn deinit(self: Self) void {
         self.allocator.free(self.name);
     }
 };
@@ -291,7 +291,7 @@ pub const PrefixOperator = struct {
         try writer.writeAll(")");
     }
 
-    pub fn deinit(self: *const Self) void {
+    pub fn deinit(self: Self) void {
         self.right.deinit();
         self.allocator.destroy(self.right);
     }
@@ -366,7 +366,7 @@ pub const InfixOperator = struct {
         try writer.writeAll(")");
     }
 
-    pub fn deinit(self: *const Self) void {
+    pub fn deinit(self: Self) void {
         self.left.deinit();
         self.allocator.destroy(self.left);
 
@@ -425,7 +425,7 @@ pub const IfExpression = struct {
         try self.alternative.string(writer);
     }
 
-    pub fn deinit(self: *const Self) void {
+    pub fn deinit(self: Self) void {
         self.condition.deinit();
         self.allocator.destroy(self.condition);
 
@@ -489,7 +489,7 @@ pub const FunctionLiteral = struct {
         try writer.writeAll("}");
     }
 
-    pub fn deinit(self: *const Self) void {
+    pub fn deinit(self: Self) void {
         for (self.parameters.items) |param| {
             self.allocator.free(param);
         }
@@ -557,7 +557,7 @@ pub const FunctionCall = struct {
         try writer.writeAll(")");
     }
 
-    pub fn deinit(self: *const Self) void {
+    pub fn deinit(self: Self) void {
         self.function.deinit();
         self.allocator.destroy(self.function);
 

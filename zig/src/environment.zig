@@ -1,134 +1,107 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Rc = @import("rc.zig").Rc;
-const object = @import("object.zig");
-const Object = object.Object;
+
+const Object = @import("object.zig").Object;
 
 pub const Environment = struct {
     const Self = @This();
 
-    store: std.StringHashMap(Rc(Object)),
-    outer: ?Rc(Environment),
+    allocator: Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) Allocator.Error!Rc(Self) {
-        const env = Self{
-            .store = std.StringHashMap(Rc(Object)).init(allocator),
-            .outer = null,
+    store: std.StringHashMap(Object),
+    outer: ?*Environment,
+
+    pub fn init(allocator: Allocator, outer: ?*Self) Self {
+        return Self{
+            .allocator = allocator,
+            .store = std.StringHashMap(Object).init(allocator),
+            .outer = outer,
         };
-        return try Rc(Self).init(allocator, env);
     }
 
-    /// Create a new environment that extends the given environment.
-    /// The new environment will retain the given environment Rc.
-    /// Therefore the caller of the method must only release the new environment.
-    pub fn extend(outer: *Rc(Environment), allocator: Allocator) Allocator.Error!Rc(Self) {
-        const new_outer = outer.retain();
-        const env = Self{
-            .store = std.StringHashMap(Rc(Object)).init(allocator),
-            .outer = new_outer,
-        };
-
-        return try Rc(Self).init(allocator, env);
-    }
-
-    /// Get the value associated with the given key.
-    /// The resulting Rc will be retained, so the caller must only release it.
-    pub fn get(self: Self, key: []const u8) ?Rc(Object) {
-        var value = self.store.get(key);
-        if (value) |*val| {
-            return val.retain();
+    pub fn get(self: Self, key: []const u8) ?Object {
+        const value = self.store.get(key);
+        if (value) |val| {
+            return val;
         }
 
         if (self.outer) |outer| {
-            return outer.value.get(key);
+            return outer.get(key);
         }
 
         return null;
     }
 
-    pub fn put(self: *Self, key: []const u8, value: Rc(Object), allocator: Allocator) Allocator.Error!void {
-        if (self.store.getPtr(key)) |existing| {
-            object.releaseObject(existing, allocator);
+    pub fn put(self: *Self, key: []const u8, value: Object) Allocator.Error!void {
+        const key_copy = try self.allocator.alloc(u8, key.len);
+        errdefer self.allocator.free(key_copy);
+
+        @memcpy(key_copy, key);
+
+        try self.store.put(key_copy, value);
+    }
+
+    // Deallocate all keys in the store and call deinit on the store.
+    // Outer environment is not affected.
+    pub fn deinit(self: *Self) void {
+        // Deallocate keys
+        var key_iter = self.store.keyIterator();
+        while (key_iter.next()) |key| {
+            self.allocator.free(key.*);
         }
 
-        try self.store.put(key, value);
+        self.store.deinit();
     }
 };
-
-pub fn releaseEnvironment(env: *Rc(Environment), allocator: Allocator) void {
-    if (env.strongCount() == 1) {
-        // After we call env.release(), the strong count will be 0 and the environment will be deallocated.
-        // We need to make sure to deallocate the environment inside Rc before we release it.
-        if (env.value.outer) |*outer| {
-            releaseEnvironment(outer, allocator);
-        }
-
-        var iter = env.value.store.valueIterator();
-        while (iter.next()) |entry| {
-            object.releaseObject(entry, allocator);
-        }
-        env.value.store.deinit();
-    }
-
-    env.release();
-}
-
-test "Environment: double put" {
-    const t = std.testing;
-
-    var env = try Environment.init(t.allocator);
-    defer releaseEnvironment(&env, t.allocator);
-
-    const obj1 = try Rc(Object).init(t.allocator, Object{ .integer = 1 });
-    const obj2 = try Rc(Object).init(t.allocator, Object{ .integer = 2 });
-
-    try env.value.put("key", obj1, t.allocator);
-    try env.value.put("key", obj2, t.allocator);
-
-    var got = env.value.get("key").?;
-    defer object.releaseObject(&got, t.allocator);
-    try t.expectEqualDeep(Object{ .integer = 2 }, got.value.*);
-}
 
 test "Environment: extend" {
     const t = std.testing;
 
-    var env = try Environment.init(t.allocator);
-    defer releaseEnvironment(&env, t.allocator);
+    var env = Environment.init(t.allocator, null);
+    defer env.deinit();
 
-    const obj1 = try Rc(Object).init(t.allocator, Object{ .integer = 1 });
-    try env.value.put("key", obj1, t.allocator);
+    const obj1 = Object{ .integer = 1 };
+    try env.put("key", obj1);
 
-    var env2 = try Environment.extend(&env, t.allocator);
-    defer releaseEnvironment(&env2, t.allocator);
+    var env2 = Environment.init(t.allocator, &env);
+    defer env2.deinit();
 
-    const obj2 = try Rc(Object).init(t.allocator, Object{ .integer = 2 });
-    try env2.value.put("key", obj2, t.allocator);
+    const obj2 = Object{ .integer = 2 };
+    try env2.put("key", obj2);
 
-    var got = env2.value.get("key").?;
-    defer object.releaseObject(&got, t.allocator);
-    try t.expectEqualDeep(Object{ .integer = 2 }, got.value.*);
+    const got = env2.get("key").?;
+    try t.expectEqualDeep(Object{ .integer = 2 }, got);
 
-    var got2 = env.value.get("key").?;
-    defer object.releaseObject(&got2, t.allocator);
-    try t.expectEqualDeep(Object{ .integer = 1 }, got2.value.*);
+    const got2 = env.get("key").?;
+    try t.expectEqualDeep(Object{ .integer = 1 }, got2);
 }
 
-test "Environment: cycle" {
+test "Environment: function object" {
     const ast = @import("ast.zig");
+    const obj = @import("object.zig");
     const t = std.testing;
 
-    var env = try Environment.init(t.allocator);
-    defer releaseEnvironment(&env, t.allocator);
+    var env = Environment.init(t.allocator, null);
+    defer env.deinit();
 
-    const fn_obj = object.FunctionObject{
-        .parameters = std.ArrayList([]const u8).init(t.allocator),
-        .body = ast.BlockStatement{
-            .statements = std.ArrayList(ast.Statement).init(t.allocator),
-        },
-        .environment = env.downgrade(),
-    };
+    var params = [_][]const u8{"x"};
 
-    const obj = Object{ .function_obj = fn_obj };
-    try env.value.put("f", try Rc(Object).init(t.allocator, obj), t.allocator);
+    var body = ast.BlockStatement.init(t.allocator);
+    defer body.deinit();
+    try body.statements.append(ast.Statement{ .expression_stmt = ast.Expression{ .integer_literal = 42 } });
+
+    const fn_obj = try t.allocator.create(obj.FunctionObject);
+    defer t.allocator.destroy(fn_obj);
+    fn_obj.* = try obj.FunctionObject.init(
+        t.allocator,
+        &params,
+        body,
+        &env,
+    );
+    defer fn_obj.deinit();
+
+    const object = Object{ .function_obj = fn_obj };
+
+    try env.put("f", object);
 }

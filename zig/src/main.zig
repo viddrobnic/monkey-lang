@@ -28,7 +28,7 @@ test {
     _ = @import("lexer.zig");
     _ = @import("ast.zig");
     _ = @import("parser.zig");
-    // _ = @import("object.zig");
-    // _ = @import("environment.zig");
+    _ = @import("object.zig");
+    _ = @import("environment.zig");
     // _ = @import("evaluate.zig");
 }
