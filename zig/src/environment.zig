@@ -1,6 +1,5 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const Rc = @import("rc.zig").Rc;
 
 const Object = @import("object.zig").Object;
 

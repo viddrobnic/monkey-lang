@@ -1,197 +1,249 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+
 const ast = @import("ast.zig");
 const env = @import("environment.zig");
+const Environment = env.Environment;
 const parser = @import("parser.zig");
-const Rc = @import("rc.zig").Rc;
 const obj = @import("object.zig");
+const Object = obj.Object;
 
 pub const EvaluateError = error{ UnknownOperator, TypeMismatch } || Allocator.Error;
 
-pub fn evaluate(program: ast.Program, environment: Rc(env.Environment), allocator: Allocator) EvaluateError!Rc(obj.Object) {
-    var result = try Rc(obj.Object).init(allocator, .null_obj);
-    errdefer obj.releaseObject(&result, allocator);
+const AllocatedObjectType = enum {
+    environment,
+    object,
+    function_object,
+};
 
-    for (program.statements.items) |statement| {
-        const new_result = try evaluateStatement(statement, environment, allocator);
-        obj.releaseObject(&result, allocator);
-        result = new_result;
+pub const Evaluator = struct {
+    const Self = @This();
 
-        switch (result.value.*) {
-            .return_obj => |*inner| {
-                const inner_res = inner.retain();
-                obj.releaseObject(&result, allocator);
-                return inner_res;
+    allocator: Allocator,
+    allocatedObjects: std.AutoHashMap(usize, AllocatedObjectType),
+    environment: *env.Environment,
+
+    pub fn init(allocator: Allocator) Allocator.Error!Self {
+        var eval = Self{
+            .allocator = allocator,
+            .allocatedObjects = std.AutoHashMap(usize, AllocatedObjectType).init(allocator),
+            .environment = try allocator.create(Environment),
+        };
+        errdefer allocator.destroy(eval.environment);
+
+        eval.environment.* = Environment.init(allocator, null);
+        try eval.allocatedObjects.put(@intFromPtr(eval.environment), .environment);
+
+        return eval;
+    }
+
+    pub fn evaluate(self: *Self, program: ast.Program) EvaluateError!obj.Object {
+        var result: Object = .null_obj;
+
+        for (program.statements.items) |statement| {
+            result = try self.evaluateStatement(statement, self.environment);
+
+            switch (result) {
+                .return_obj => |inner| {
+                    // TODO: Collect garbage
+                    return inner.*;
+                },
+                else => {},
+            }
+
+            // TODO: Collect garbage
+        }
+
+        return result;
+    }
+
+    pub fn deinit(self: *Self) void {
+        var iterator = self.allocatedObjects.iterator();
+        while (iterator.next()) |item| {
+            switch (item.value_ptr.*) {
+                .environment => {
+                    var environment: *Environment = @ptrFromInt(item.key_ptr.*);
+
+                    environment.deinit();
+                    self.allocator.destroy(environment);
+                },
+                .object => {
+                    const object: *Object = @ptrFromInt(item.key_ptr.*);
+                    self.allocator.destroy(object);
+                },
+                .function_object => {
+                    const fn_obj: *obj.FunctionObject = @ptrFromInt(item.key_ptr.*);
+                    fn_obj.deinit();
+
+                    self.allocator.destroy(fn_obj);
+                },
+            }
+        }
+
+        self.allocatedObjects.deinit();
+    }
+
+    fn allocateObject(self: *Self) Allocator.Error!*Object {
+        const object = try self.allocator.create(Object);
+        errdefer self.allocator.destroy(object);
+
+        try self.allocatedObjects.put(@intFromPtr(object), .object);
+
+        return object;
+    }
+
+    fn allocateFunctionObject(self: *Self) Allocator.Error!*obj.FunctionObject {
+        const fn_obj = try self.allocator.create(obj.FunctionObject);
+        errdefer self.allocator.destroy(fn_obj);
+
+        try self.allocatedObjects.put(@intFromPtr(fn_obj), .function_object);
+
+        return fn_obj;
+    }
+
+    fn evaluateStatement(self: *Self, statement: ast.Statement, environment: *Environment) EvaluateError!Object {
+        return switch (statement) {
+            .let_stmt => |stmt| try self.evaluateLetStatement(stmt, environment),
+            .return_stmt => |stmt| blk: {
+                const inner_obj = try self.allocateObject();
+                inner_obj.* = try self.evaluateExpression(stmt.value, environment);
+
+                break :blk Object{ .return_obj = inner_obj };
             },
-            else => {},
+            .expression_stmt => |stmt| try self.evaluateExpression(stmt, environment),
+        };
+    }
+
+    fn evaluateLetStatement(self: *Self, statement: ast.LetStatement, environment: *Environment) EvaluateError!Object {
+        const value = try self.evaluateExpression(statement.value, environment);
+        try environment.put(statement.name, value);
+
+        return .null_obj;
+    }
+
+    fn evaluateExpression(self: *Self, expression: ast.Expression, environment: *Environment) EvaluateError!Object {
+        switch (expression) {
+            .identifier => |ident| {
+                const res = environment.get(ident.name);
+                if (res) |object| {
+                    return object;
+                } else {
+                    return .null_obj;
+                }
+            },
+            .integer_literal => |value| return Object{ .integer = value },
+            .boolean_literal => |value| return Object{ .boolean = value },
+            .prefix_operator => |operator| return self.evaluatePrefixExpression(operator, environment),
+            .infix_operator => |operator| return self.evaluateInfixExpression(operator, environment),
+            .if_expression => |if_expr| return self.evaluateIfExpression(if_expr, environment),
+            .function_literal => |function| {
+                const fn_obj = try self.allocateFunctionObject();
+                fn_obj.* = try obj.FunctionObject.init(
+                    self.allocator,
+                    function.parameters.items,
+                    function.body,
+                    environment,
+                );
+
+                return Object{ .function_obj = fn_obj };
+            },
+            else => unreachable,
         }
     }
 
-    return result;
-}
+    fn evaluatePrefixExpression(self: *Self, operator: ast.PrefixOperator, environment: *Environment) EvaluateError!Object {
+        const right = try self.evaluateExpression(operator.right.*, environment);
 
-fn evaluateStatement(statement: ast.Statement, environment: Rc(env.Environment), allocator: Allocator) EvaluateError!Rc(obj.Object) {
-    return switch (statement) {
-        .let_stmt => |stmt| try evaluateLetStatement(stmt, environment, allocator),
-        .return_stmt => |stmt| blk: {
-            var value = try evaluateExpression(stmt.value, environment, allocator);
-            errdefer obj.releaseObject(&value, allocator);
+        switch (operator.operator) {
+            .not => {
+                switch (right) {
+                    .boolean => |value| {
+                        return Object{ .boolean = !value };
+                    },
+                    .null_obj => {
+                        return Object{ .boolean = true };
+                    },
+                    else => {
+                        return Object{ .boolean = false };
+                    },
+                }
+            },
+            .negative => {
+                switch (right) {
+                    .integer => |value| {
+                        return Object{ .integer = -value };
+                    },
+                    else => {
+                        return EvaluateError.UnknownOperator;
+                    },
+                }
+            },
+        }
+    }
 
-            const object = obj.Object{ .return_obj = value };
-            break :blk try Rc(obj.Object).init(allocator, object);
-        },
-        .expression_stmt => |stmt| try evaluateExpression(stmt, environment, allocator),
-    };
-}
+    fn evaluateInfixExpression(self: *Self, operator: ast.InfixOperator, environment: *Environment) EvaluateError!Object {
+        const left = try self.evaluateExpression(operator.left.*, environment);
+        const right = try self.evaluateExpression(operator.right.*, environment);
 
-fn evaluateLetStatement(statement: ast.LetStatement, environment: Rc(env.Environment), allocator: Allocator) EvaluateError!Rc(obj.Object) {
-    const value = try evaluateExpression(statement.value, environment, allocator);
-    const name = statement.name;
-    try environment.value.put(name, value, allocator);
-
-    return try Rc(obj.Object).init(allocator, .null_obj);
-}
-
-fn evaluateExpression(expression: ast.Expression, environment: Rc(env.Environment), allocator: Allocator) EvaluateError!Rc(obj.Object) {
-    switch (expression) {
-        .identifier => |name| {
-            const res = environment.value.get(name);
-            if (res == null) {
-                return try Rc(obj.Object).init(allocator, .null_obj);
-            } else {
-                return res.?;
-            }
-        },
-        .integer_literal => |value| return try Rc(obj.Object).init(allocator, obj.Object{ .integer = value }),
-        .boolean_literal => |value| return try Rc(obj.Object).init(allocator, obj.Object{ .boolean = value }),
-        .prefix_operator => |operator| return evaluatePrefixExpression(operator, environment, allocator),
-        .infix_operator => |operator| return evaluateInfixExpression(operator, environment, allocator),
-        .if_expression => |if_expr| return evaluateIfExpression(if_expr, environment, allocator),
-        .function_literal => |function| {
-            var parameters = std.ArrayList([]const u8).init(allocator);
-            for (function.parameters.items) |param| {
-                const new_param = try allocator.alloc(u8, param.len);
-                @memcpy(new_param, param);
-
-                try parameters.append(new_param);
-            }
-
-            var new_env = environment;
-            const fn_obj = obj.FunctionObject{
-                .parameters = parameters,
-                .body = try function.body.clone(allocator),
-                .environment = new_env.downgrade(),
+        if (@as(obj.ObjectTag, left) == obj.ObjectTag.integer and @as(obj.ObjectTag, right) == obj.ObjectTag.integer) {
+            return switch (operator.operator) {
+                .add => .{ .integer = left.integer + right.integer },
+                .subtract => .{ .integer = left.integer - right.integer },
+                .multiply => .{ .integer = left.integer * right.integer },
+                .divide => .{ .integer = @divTrunc(left.integer, right.integer) },
+                .equal => .{ .boolean = left.integer == right.integer },
+                .not_equal => .{ .boolean = left.integer != right.integer },
+                .less_than => .{ .boolean = left.integer < right.integer },
+                .greater_than => .{ .boolean = left.integer > right.integer },
             };
+        }
 
-            return try Rc(obj.Object).init(allocator, obj.Object{ .function_obj = fn_obj });
-        },
-        else => unreachable,
-    }
-}
+        if (@as(obj.ObjectTag, left) == obj.ObjectTag.boolean and @as(obj.ObjectTag, right) == obj.ObjectTag.boolean) {
+            return switch (operator.operator) {
+                .equal => .{ .boolean = left.boolean == right.boolean },
+                .not_equal => .{ .boolean = left.boolean != right.boolean },
+                else => return EvaluateError.UnknownOperator,
+            };
+        }
 
-fn evaluatePrefixExpression(operator: ast.PrefixOperator, environment: Rc(env.Environment), allocator: Allocator) EvaluateError!Rc(obj.Object) {
-    var right = try evaluateExpression(operator.right.*, environment, allocator);
-    defer obj.releaseObject(&right, allocator);
+        if (@intFromEnum(left) != @intFromEnum(right)) {
+            return EvaluateError.TypeMismatch;
+        }
 
-    switch (operator.operator) {
-        .not => {
-            switch (right.value.*) {
-                .boolean => |value| {
-                    return try Rc(obj.Object).init(allocator, obj.Object{ .boolean = !value });
-                },
-                .null_obj => {
-                    return try Rc(obj.Object).init(allocator, obj.Object{ .boolean = true });
-                },
-                else => {
-                    return try Rc(obj.Object).init(allocator, obj.Object{ .boolean = false });
-                },
-            }
-        },
-        .negative => {
-            switch (right.value.*) {
-                .integer => |value| {
-                    return try Rc(obj.Object).init(allocator, obj.Object{ .integer = -value });
-                },
-                else => {
-                    return EvaluateError.UnknownOperator;
-                },
-            }
-        },
-    }
-}
-
-fn evaluateInfixExpression(operator: ast.InfixOperator, environment: Rc(env.Environment), allocator: Allocator) EvaluateError!Rc(obj.Object) {
-    var left = try evaluateExpression(operator.left.*, environment, allocator);
-    defer obj.releaseObject(&left, allocator);
-
-    var right = try evaluateExpression(operator.right.*, environment, allocator);
-    defer obj.releaseObject(&right, allocator);
-
-    if (@as(obj.ObjectTag, left.value.*) == obj.ObjectTag.integer and @as(obj.ObjectTag, right.value.*) == obj.ObjectTag.integer) {
-        const res: obj.Object = switch (operator.operator) {
-            .add => .{ .integer = left.value.integer + right.value.integer },
-            .subtract => .{ .integer = left.value.integer - right.value.integer },
-            .multiply => .{ .integer = left.value.integer * right.value.integer },
-            .divide => .{ .integer = @divTrunc(left.value.integer, right.value.integer) },
-            .equal => .{ .boolean = left.value.integer == right.value.integer },
-            .not_equal => .{ .boolean = left.value.integer != right.value.integer },
-            .less_than => .{ .boolean = left.value.integer < right.value.integer },
-            .greater_than => .{ .boolean = left.value.integer > right.value.integer },
-        };
-        return try Rc(obj.Object).init(allocator, res);
+        return EvaluateError.UnknownOperator;
     }
 
-    if (@as(obj.ObjectTag, left.value.*) == obj.ObjectTag.boolean and @as(obj.ObjectTag, right.value.*) == obj.ObjectTag.boolean) {
-        const res: obj.Object = switch (operator.operator) {
-            .equal => .{ .boolean = left.value.boolean == right.value.boolean },
-            .not_equal => .{ .boolean = left.value.boolean != right.value.boolean },
-            else => return EvaluateError.UnknownOperator,
+    fn evaluateIfExpression(self: *Self, if_expr: ast.IfExpression, environment: *Environment) EvaluateError!Object {
+        const condition = try self.evaluateExpression(if_expr.condition.*, environment);
+
+        const is_truthy = switch (condition) {
+            .boolean => condition.boolean,
+            .null_obj => false,
+            else => true,
         };
 
-        return try Rc(obj.Object).init(allocator, res);
-    }
-
-    if (@intFromEnum(left.value.*) != @intFromEnum(right.value.*)) {
-        return EvaluateError.TypeMismatch;
-    }
-
-    return EvaluateError.UnknownOperator;
-}
-
-fn evaluateIfExpression(if_expr: ast.IfExpression, environment: Rc(env.Environment), allocator: Allocator) EvaluateError!Rc(obj.Object) {
-    var condition = try evaluateExpression(if_expr.condition.*, environment, allocator);
-    defer obj.releaseObject(&condition, allocator);
-
-    const is_truthy = switch (condition.value.*) {
-        .boolean => condition.value.boolean,
-        .null_obj => false,
-        else => true,
-    };
-
-    if (is_truthy) {
-        return evaluateBlockStatement(if_expr.consequence, environment, allocator);
-    } else {
-        return evaluateBlockStatement(if_expr.alternative, environment, allocator);
-    }
-}
-
-fn evaluateBlockStatement(block: ast.BlockStatement, environment: Rc(env.Environment), allocator: Allocator) EvaluateError!Rc(obj.Object) {
-    var result = try Rc(obj.Object).init(allocator, .null_obj);
-    errdefer obj.releaseObject(&result, allocator);
-
-    for (block.statements.items) |statement| {
-        const new_result = try evaluateStatement(statement, environment, allocator);
-        obj.releaseObject(&result, allocator);
-        result = new_result;
-
-        switch (result.value.*) {
-            .return_obj => return result,
-            else => {},
+        if (is_truthy) {
+            return self.evaluateBlockStatement(if_expr.consequence, environment);
+        } else {
+            return self.evaluateBlockStatement(if_expr.alternative, environment);
         }
     }
 
-    return result;
-}
+    fn evaluateBlockStatement(self: *Self, block: ast.BlockStatement, environment: *Environment) EvaluateError!Object {
+        var result: Object = .null_obj;
+
+        for (block.statements.items) |statement| {
+            result = try self.evaluateStatement(statement, environment);
+
+            switch (result) {
+                .return_obj => return result,
+                else => {},
+            }
+        }
+
+        return result;
+    }
+};
 
 test "Eval: integer" {
     const t = std.testing;
@@ -264,15 +316,14 @@ test "Eval: integer" {
 
     for (tests) |tt| {
         const program = try parser.parse(tt.input, t.allocator);
-        defer program.deinit(t.allocator);
+        defer program.deinit();
 
-        var environment = try env.Environment.init(t.allocator);
-        defer env.releaseEnvironment(&environment, t.allocator);
+        var evaluator = try Evaluator.init(t.allocator);
+        defer evaluator.deinit();
 
-        const res = try evaluate(program, environment, t.allocator);
-        defer res.release();
+        const res = try evaluator.evaluate(program);
 
-        try t.expectEqual(obj.Object{ .integer = tt.expected }, res.value.*);
+        try t.expectEqual(obj.Object{ .integer = tt.expected }, res);
     }
 }
 
@@ -363,15 +414,14 @@ test "Eval: bool" {
 
     for (tests) |tt| {
         const program = try parser.parse(tt.input, t.allocator);
-        defer program.deinit(t.allocator);
+        defer program.deinit();
 
-        var environment = try env.Environment.init(t.allocator);
-        defer env.releaseEnvironment(&environment, t.allocator);
+        var evaluator = try Evaluator.init(t.allocator);
+        defer evaluator.deinit();
 
-        const res = try evaluate(program, environment, t.allocator);
-        defer res.release();
+        const res = try evaluator.evaluate(program);
 
-        try t.expectEqual(obj.Object{ .boolean = tt.expected }, res.value.*);
+        try t.expectEqual(obj.Object{ .boolean = tt.expected }, res);
     }
 }
 
@@ -410,15 +460,14 @@ test "Eval: bang operator" {
 
     for (tests) |tt| {
         const program = try parser.parse(tt.input, t.allocator);
-        defer program.deinit(t.allocator);
+        defer program.deinit();
 
-        var environment = try env.Environment.init(t.allocator);
-        defer env.releaseEnvironment(&environment, t.allocator);
+        var evaluator = try Evaluator.init(t.allocator);
+        defer evaluator.deinit();
 
-        const res = try evaluate(program, environment, t.allocator);
-        defer res.release();
+        const res = try evaluator.evaluate(program);
 
-        try t.expectEqual(obj.Object{ .boolean = tt.expected }, res.value.*);
+        try t.expectEqual(obj.Object{ .boolean = tt.expected }, res);
     }
 }
 
@@ -461,15 +510,13 @@ test "Eval: if else expression" {
 
     for (tests) |tt| {
         const program = try parser.parse(tt.input, t.allocator);
-        defer program.deinit(t.allocator);
+        defer program.deinit();
 
-        var environment = try env.Environment.init(t.allocator);
-        defer env.releaseEnvironment(&environment, t.allocator);
+        var evaluator = try Evaluator.init(t.allocator);
+        defer evaluator.deinit();
 
-        var res = try evaluate(program, environment, t.allocator);
-        defer obj.releaseObject(&res, t.allocator);
-
-        try t.expectEqual(tt.expected, res.value.*);
+        const res = try evaluator.evaluate(program);
+        try t.expectEqual(tt.expected, res);
     }
 }
 
@@ -504,15 +551,13 @@ test "Eval: return" {
 
     for (tests) |tt| {
         const program = try parser.parse(tt.input, t.allocator);
-        defer program.deinit(t.allocator);
+        defer program.deinit();
 
-        var environment = try env.Environment.init(t.allocator);
-        defer env.releaseEnvironment(&environment, t.allocator);
+        var evaluator = try Evaluator.init(t.allocator);
+        defer evaluator.deinit();
 
-        var res = try evaluate(program, environment, t.allocator);
-        defer obj.releaseObject(&res, t.allocator);
-
-        try t.expectEqual(tt.expected, res.value.*);
+        const res = try evaluator.evaluate(program);
+        try t.expectEqual(tt.expected, res);
     }
 }
 
@@ -543,15 +588,13 @@ test "Eval: let statements" {
 
     for (tests) |tt| {
         const program = try parser.parse(tt.input, t.allocator);
-        defer program.deinit(t.allocator);
+        defer program.deinit();
 
-        var environment = try env.Environment.init(t.allocator);
-        defer env.releaseEnvironment(&environment, t.allocator);
+        var evaluator = try Evaluator.init(t.allocator);
+        defer evaluator.deinit();
 
-        var res = try evaluate(program, environment, t.allocator);
-        defer obj.releaseObject(&res, t.allocator);
-
-        try t.expectEqual(tt.expected, res.value.*);
+        const res = try evaluator.evaluate(program);
+        try t.expectEqual(tt.expected, res);
     }
 }
 
@@ -560,15 +603,14 @@ test "Eval: function object" {
 
     const input = "fn(x) { x + 2; }";
     const program = try parser.parse(input, t.allocator);
-    defer program.deinit(t.allocator);
+    defer program.deinit();
 
-    var environment = try env.Environment.init(t.allocator);
-    defer env.releaseEnvironment(&environment, t.allocator);
+    var evaluator = try Evaluator.init(t.allocator);
+    defer evaluator.deinit();
 
-    var res = try evaluate(program, environment, t.allocator);
-    defer obj.releaseObject(&res, t.allocator);
+    const res = try evaluator.evaluate(program);
 
-    const fn_obj = res.value.function_obj;
+    const fn_obj = res.function_obj;
     try t.expectEqual(1, fn_obj.parameters.items.len);
     try t.expectEqualStrings("x", fn_obj.parameters.items[0]);
 

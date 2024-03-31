@@ -1,10 +1,9 @@
 const std = @import("std");
 const token = @import("token.zig");
 const lexer = @import("lexer.zig");
-// const ast = @import("ast.zig");
-// const rc = @import("rc.zig");
-// const object = @import("object.zig");
-// const environment = @import("environment.zig");
+const ast = @import("ast.zig");
+const object = @import("object.zig");
+const environment = @import("environment.zig");
 // const evaluate = @import("evaluate.zig");
 
 pub fn main() !void {
@@ -30,5 +29,5 @@ test {
     _ = @import("parser.zig");
     _ = @import("object.zig");
     _ = @import("environment.zig");
-    // _ = @import("evaluate.zig");
+    _ = @import("evaluate.zig");
 }

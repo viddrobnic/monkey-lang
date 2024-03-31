@@ -1,7 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const rc = @import("rc.zig");
 const ast = @import("ast.zig");
 const env = @import("environment.zig");
 
