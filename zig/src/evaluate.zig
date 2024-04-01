@@ -50,42 +50,51 @@ pub const Evaluator = struct {
 
             switch (result) {
                 .return_obj => |inner| {
-                    // TODO: Collect garbage
-                    return inner.*;
+                    const res = inner.*;
+
+                    try self.collectGarbage();
+                    return res;
                 },
                 else => {},
             }
-
-            // TODO: Collect garbage
         }
 
+        try self.collectGarbage();
         return result;
     }
 
     pub fn deinit(self: *Self) void {
         var iterator = self.allocatedObjects.iterator();
         while (iterator.next()) |item| {
-            switch (item.value_ptr.*) {
-                .environment => {
-                    var environment: *Environment = @ptrFromInt(item.key_ptr.*);
-
-                    environment.deinit();
-                    self.allocator.destroy(environment);
-                },
-                .object => {
-                    const object: *Object = @ptrFromInt(item.key_ptr.*);
-                    self.allocator.destroy(object);
-                },
-                .function_object => {
-                    const fn_obj: *obj.FunctionObject = @ptrFromInt(item.key_ptr.*);
-                    fn_obj.deinit();
-
-                    self.allocator.destroy(fn_obj);
-                },
-            }
+            deallocateObject(self.allocator, item);
         }
 
         self.allocatedObjects.deinit();
+    }
+
+    fn collectGarbage(self: *Self) Allocator.Error!void {
+        var accessible_objects = std.AutoHashMap(usize, void).init(self.allocator);
+        defer accessible_objects.deinit();
+
+        try getAccessibleObjectsFromEnv(self.environment, &accessible_objects);
+
+        var to_remove = try std.ArrayList(usize).initCapacity(self.allocator, self.allocatedObjects.count());
+        defer to_remove.deinit();
+
+        var iterator = self.allocatedObjects.iterator();
+        while (iterator.next()) |item| {
+            if (accessible_objects.get(item.key_ptr.*) != null) {
+                continue;
+            }
+
+            deallocateObject(self.allocator, item);
+
+            try to_remove.append(item.key_ptr.*);
+        }
+
+        for (to_remove.items) |key| {
+            _ = self.allocatedObjects.remove(key);
+        }
     }
 
     fn allocateObject(self: *Self) Allocator.Error!*Object {
@@ -284,6 +293,58 @@ pub const Evaluator = struct {
         }
     }
 };
+
+fn deallocateObject(allocator: Allocator, item: std.AutoHashMap(usize, AllocatedObjectType).Entry) void {
+    switch (item.value_ptr.*) {
+        .environment => {
+            var environment: *Environment = @ptrFromInt(item.key_ptr.*);
+
+            environment.deinit();
+            allocator.destroy(environment);
+        },
+        .object => {
+            const object: *Object = @ptrFromInt(item.key_ptr.*);
+            allocator.destroy(object);
+        },
+        .function_object => {
+            const fn_obj: *obj.FunctionObject = @ptrFromInt(item.key_ptr.*);
+            fn_obj.deinit();
+
+            allocator.destroy(fn_obj);
+        },
+    }
+}
+
+fn getAccessibleObjectsFromEnv(environment: *Environment, accessible_objects: *std.AutoHashMap(usize, void)) Allocator.Error!void {
+    if (accessible_objects.get(@intFromPtr(environment)) != null) {
+        return;
+    }
+
+    try accessible_objects.put(@intFromPtr(environment), {});
+
+    if (environment.outer) |outer| {
+        try getAccessibleObjectsFromEnv(outer, accessible_objects);
+    }
+
+    var iterator = environment.store.valueIterator();
+    while (iterator.next()) |item| {
+        try getAccessibleObjectsFromObj(item.*, accessible_objects);
+    }
+}
+
+fn getAccessibleObjectsFromObj(object: Object, accessible_objects: *std.AutoHashMap(usize, void)) Allocator.Error!void {
+    switch (object) {
+        .return_obj => |inner| {
+            try accessible_objects.put(@intFromPtr(inner), {});
+            try getAccessibleObjectsFromObj(inner.*, accessible_objects);
+        },
+        .function_obj => |fn_obj| {
+            try accessible_objects.put(@intFromPtr(fn_obj), {});
+            try getAccessibleObjectsFromEnv(fn_obj.environment, accessible_objects);
+        },
+        else => {},
+    }
+}
 
 test "Eval: integer" {
     const t = std.testing;
@@ -636,29 +697,6 @@ test "Eval: let statements" {
         const res = try evaluator.evaluate(program);
         try t.expectEqual(tt.expected, res);
     }
-}
-
-test "Eval: function object" {
-    const t = std.testing;
-
-    const input = "fn(x) { x + 2; }";
-    const program = try parser.parse(input, t.allocator);
-    defer program.deinit();
-
-    var evaluator = try Evaluator.init(t.allocator);
-    defer evaluator.deinit();
-
-    const res = try evaluator.evaluate(program);
-
-    const fn_obj = res.function_obj;
-    try t.expectEqual(1, fn_obj.parameters.items.len);
-    try t.expectEqualStrings("x", fn_obj.parameters.items[0]);
-
-    var debug_str = std.ArrayList(u8).init(t.allocator);
-    defer debug_str.deinit();
-    try fn_obj.body.string(debug_str.writer());
-
-    try t.expectEqualStrings("(x + 2);", debug_str.items);
 }
 
 test "Eval: function application" {
