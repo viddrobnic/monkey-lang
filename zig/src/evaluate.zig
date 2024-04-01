@@ -8,7 +8,12 @@ const parser = @import("parser.zig");
 const obj = @import("object.zig");
 const Object = obj.Object;
 
-pub const EvaluateError = error{ UnknownOperator, TypeMismatch } || Allocator.Error;
+pub const EvaluateError = error{
+    UnknownOperator,
+    TypeMismatch,
+    NotAFunction,
+    FunctionArgumentMismatch,
+} || Allocator.Error;
 
 const AllocatedObjectType = enum {
     environment,
@@ -101,6 +106,15 @@ pub const Evaluator = struct {
         return fn_obj;
     }
 
+    fn allocateEnvironment(self: *Self) Allocator.Error!*Environment {
+        const environment = try self.allocator.create(Environment);
+        errdefer self.allocator.destroy(environment);
+
+        try self.allocatedObjects.put(@intFromPtr(environment), .environment);
+
+        return environment;
+    }
+
     fn evaluateStatement(self: *Self, statement: ast.Statement, environment: *Environment) EvaluateError!Object {
         return switch (statement) {
             .let_stmt => |stmt| try self.evaluateLetStatement(stmt, environment),
@@ -147,7 +161,7 @@ pub const Evaluator = struct {
 
                 return Object{ .function_obj = fn_obj };
             },
-            else => unreachable,
+            .function_call => |fn_call| return self.evaluateFunctionCall(fn_call, environment),
         }
     }
 
@@ -242,6 +256,32 @@ pub const Evaluator = struct {
         }
 
         return result;
+    }
+
+    fn evaluateFunctionCall(self: *Self, fn_call: ast.FunctionCall, environment: *Environment) EvaluateError!Object {
+        const function = try self.evaluateExpression(fn_call.function.*, environment);
+        switch (function) {
+            .function_obj => |fn_obj| {
+                var extended_env = try self.allocateEnvironment();
+                extended_env.* = Environment.init(self.allocator, fn_obj.environment);
+
+                if (fn_call.arguments.items.len != fn_obj.parameters.items.len) {
+                    return EvaluateError.FunctionArgumentMismatch;
+                }
+
+                for (fn_call.arguments.items, fn_obj.parameters.items) |arg, param| {
+                    const value = try self.evaluateExpression(arg, environment);
+                    try extended_env.put(param, value);
+                }
+
+                const evaluated = try self.evaluateBlockStatement(fn_obj.body, extended_env);
+                switch (evaluated) {
+                    .return_obj => |inner| return inner.*,
+                    else => return evaluated,
+                }
+            },
+            else => return EvaluateError.NotAFunction,
+        }
     }
 };
 
@@ -619,4 +659,97 @@ test "Eval: function object" {
     try fn_obj.body.string(debug_str.writer());
 
     try t.expectEqualStrings("(x + 2);", debug_str.items);
+}
+
+test "Eval: function application" {
+    const t = std.testing;
+
+    const Test = struct {
+        input: []const u8,
+        expected: obj.Object,
+    };
+    const tests = [_]Test{
+        .{
+            .input = "let identity = fn(x) { x; }; identity(5);",
+            .expected = obj.Object{ .integer = 5 },
+        },
+        .{
+            .input = "let identity = fn(x) { return x; }; identity(10);",
+            .expected = obj.Object{ .integer = 10 },
+        },
+        .{
+            .input = "let double = fn(x) { x * 2; }; double(5);",
+            .expected = obj.Object{ .integer = 10 },
+        },
+        .{
+            .input = "let add = fn(x, y) { x + y; }; add(5, 5);",
+            .expected = obj.Object{ .integer = 10 },
+        },
+        .{
+            .input = "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));",
+            .expected = obj.Object{ .integer = 20 },
+        },
+        .{
+            .input = "fn(x) { x; }(5);",
+            .expected = obj.Object{ .integer = 5 },
+        },
+    };
+
+    for (tests) |tt| {
+        const program = try parser.parse(tt.input, t.allocator);
+        defer program.deinit();
+
+        var evaluator = try Evaluator.init(t.allocator);
+        defer evaluator.deinit();
+
+        const res = try evaluator.evaluate(program);
+        try t.expectEqual(tt.expected, res);
+    }
+}
+
+test "Eval: closures" {
+    const t = std.testing;
+
+    const input =
+        \\ let newAdder = fn(x) {
+        \\   fn(y) { x + y; };
+        \\ };
+        \\
+        \\ let addTwo = newAdder(2);
+        \\ addTwo(3)
+    ;
+
+    const program = try parser.parse(input, t.allocator);
+    defer program.deinit();
+
+    var evaluator = try Evaluator.init(t.allocator);
+    defer evaluator.deinit();
+
+    const res = try evaluator.evaluate(program);
+    try t.expectEqual(obj.Object{ .integer = 5 }, res);
+}
+
+test "Eval: recursion" {
+    const t = std.testing;
+
+    const input =
+        \\ let fibonacci = fn(x) {
+        \\   if (x < 3) {
+        \\     return 1;
+        \\   } else {
+        \\     return fibonacci(x - 1) + fibonacci(x - 2);
+        \\   }
+        \\ };
+        \\
+        \\ fibonacci(5);
+    ;
+
+    const program = try parser.parse(input, t.allocator);
+    defer program.deinit();
+
+    var evaluator = try Evaluator.init(t.allocator);
+    defer evaluator.deinit();
+
+    const res = try evaluator.evaluate(program);
+    try t.expectEqual(obj.Object{ .integer = 5 }, res);
 }
