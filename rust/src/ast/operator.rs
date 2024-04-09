@@ -1,4 +1,4 @@
-use crate::{parse::Error, token::Token};
+use crate::{parse, token::Token};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum PrefixOperatorKind {
@@ -16,14 +16,14 @@ impl PrefixOperatorKind {
     }
 }
 
-impl TryFrom<&Token> for PrefixOperatorKind {
-    type Error = Error;
+impl TryFrom<&Option<Token>> for PrefixOperatorKind {
+    type Error = parse::Error;
 
-    fn try_from(value: &Token) -> Result<Self, Self::Error> {
+    fn try_from(value: &Option<Token>) -> Result<Self, Self::Error> {
         match value {
-            Token::Bang => Ok(Self::Not),
-            Token::Minus => Ok(Self::Negative),
-            token => Err(Error::UnexpectedToken(token.clone())),
+            Some(Token::Bang) => Ok(Self::Not),
+            Some(Token::Minus) => Ok(Self::Negative),
+            token => Err(parse::Error::unexpected_token(token)),
         }
     }
 }
@@ -56,20 +56,20 @@ impl InfixOperatorKind {
     }
 }
 
-impl TryFrom<&Token> for InfixOperatorKind {
-    type Error = Error;
+impl TryFrom<&Option<Token>> for InfixOperatorKind {
+    type Error = parse::Error;
 
-    fn try_from(value: &Token) -> Result<Self, Self::Error> {
+    fn try_from(value: &Option<Token>) -> Result<Self, Self::Error> {
         match value {
-            Token::Plus => Ok(Self::Add),
-            Token::Minus => Ok(Self::Subtract),
-            Token::Asterisk => Ok(Self::Multiply),
-            Token::Slash => Ok(Self::Divide),
-            Token::Eq => Ok(Self::Equal),
-            Token::NotEq => Ok(Self::NotEqual),
-            Token::Gt => Ok(Self::GreaterThan),
-            Token::Lt => Ok(Self::LessThan),
-            token => Err(Error::UnexpectedToken(token.clone())),
+            Some(Token::Plus) => Ok(Self::Add),
+            Some(Token::Minus) => Ok(Self::Subtract),
+            Some(Token::Asterisk) => Ok(Self::Multiply),
+            Some(Token::Slash) => Ok(Self::Divide),
+            Some(Token::Eq) => Ok(Self::Equal),
+            Some(Token::NotEq) => Ok(Self::NotEqual),
+            Some(Token::Gt) => Ok(Self::GreaterThan),
+            Some(Token::Lt) => Ok(Self::LessThan),
+            token => Err(parse::Error::unexpected_token(token)),
         }
     }
 }

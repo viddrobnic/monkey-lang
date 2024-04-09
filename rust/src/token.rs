@@ -1,7 +1,6 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     Illegal(u8),
-    Eof,
     // Identifiers + literals
     Ident(String), // add, foobar, x, y, ...
     Int(String),   // 1343456

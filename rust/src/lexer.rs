@@ -1,16 +1,16 @@
 use crate::token::Token;
 
-pub struct Lexer {
-    input: Vec<u8>,
+pub struct Lexer<'a> {
+    input: &'a [u8],
     position: usize,
     read_position: usize,
     ch: u8,
 }
 
-impl Lexer {
-    pub fn new(input: &str) -> Self {
+impl<'a> Lexer<'a> {
+    pub fn new(input: &'a str) -> Self {
         let mut lexer = Lexer {
-            input: input.as_bytes().to_owned(),
+            input: input.as_bytes(),
             position: 0,
             read_position: 0,
             ch: 0,
@@ -73,8 +73,12 @@ impl Lexer {
 
         std::str::from_utf8(&self.input[start_position..self.position]).unwrap()
     }
+}
 
-    pub fn next_token(&mut self) -> Token {
+impl Iterator for Lexer<'_> {
+    type Item = Token;
+
+    fn next(&mut self) -> Option<Self::Item> {
         self.skip_whitespace();
 
         let token = match self.ch {
@@ -102,21 +106,21 @@ impl Lexer {
                 }
                 _ => Token::Bang,
             },
-            b'"' => Token::String(self.read_string().to_owned()),
+            b'"' => Token::String(self.read_string().to_string()),
             b'/' => Token::Slash,
             b'*' => Token::Asterisk,
             b'<' => Token::Lt,
             b'>' => Token::Gt,
-            b'\0' => Token::Eof,
+            b'\0' => return None,
             _ => {
                 if is_letter(self.ch) {
                     let token = Token::lookup_ident(self.read_identifier());
                     // Exit early, because read_char() is called in the read_identifier() function.
-                    return token;
+                    return Some(token);
                 } else if self.ch.is_ascii_digit() {
-                    let token = Token::Int(self.read_number().to_owned());
+                    let token = Token::Int(self.read_number().to_string());
                     // Exit early, because read_char() is called in the read_number() function.
-                    return token;
+                    return Some(token);
                 } else {
                     Token::Illegal(self.ch)
                 }
@@ -124,7 +128,7 @@ impl Lexer {
         };
 
         self.read_char();
-        token
+        Some(token)
     }
 }
 
@@ -245,18 +249,10 @@ if (5 < 10) {
             Token::Int("2".to_string()),
             Token::RBracket,
             Token::Semicolon,
-            Token::Eof,
         ];
 
-        let mut lexer = Lexer::new(input);
-
-        for (index, expected) in expected_values.iter().enumerate() {
-            let token = lexer.next_token();
-            assert_eq!(
-                token, *expected,
-                "tests[{}] - token wrong. expected={:?}, got={:?}",
-                index, expected, token
-            );
-        }
+        let lexer = Lexer::new(input);
+        let tokens: Vec<Token> = lexer.collect();
+        assert_eq!(tokens, expected_values);
     }
 }

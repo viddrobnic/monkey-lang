@@ -1,25 +1,30 @@
 const std = @import("std");
-const token = @import("token.zig");
-const lexer = @import("lexer.zig");
-const ast = @import("ast.zig");
-const object = @import("object.zig");
-const environment = @import("environment.zig");
-// const evaluate = @import("evaluate.zig");
+const parser = @import("parser.zig");
+const eval = @import("evaluate.zig");
 
 pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+    const input =
+        \\ let fibonacci = fn(x) {
+        \\   if (x < 3) {
+        \\     return 1;
+        \\   } else {
+        \\     return fibonacci(x - 1) + fibonacci(x - 2);
+        \\   }
+        \\ };
+        \\
+        \\ fibonacci(5);
+    ;
 
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
+    const allocator = std.heap.c_allocator;
 
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
+    const program = try parser.parse(input, allocator);
+    defer program.deinit();
 
-    try bw.flush(); // don't forget to flush!
+    var evaluator = try eval.Evaluator.init(allocator);
+    defer evaluator.deinit();
+
+    const res = try evaluator.evaluate(program);
+    std.debug.print("{}\n", .{res});
 }
 
 test {
@@ -28,6 +33,5 @@ test {
     _ = @import("ast.zig");
     _ = @import("parser.zig");
     _ = @import("object.zig");
-    _ = @import("environment.zig");
     _ = @import("evaluate.zig");
 }

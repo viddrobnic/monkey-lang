@@ -1,38 +1,25 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use monkey_lang::{
-    evaluate::{Environment, Evaluate},
-    lexer::Lexer,
-    parse::Parser,
-};
+use criterion::{criterion_group, criterion_main, Criterion};
+use monkey_lang::{evaluate::Evaluator, parse};
 
 fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("fib 10", |b| {
+    c.bench_function("fib 20", |b| {
         b.iter(|| {
             let input = r#"
-            let fibonacci = fn(x) {
-                if (x < 2) {
-                    return 1;
-                } else {
-                    return fibonacci(x - 1) + fibonacci(x - 2);
-                }
-            };
+                let fibonacci = fn(x) {
+                    if (x < 3) {
+                        return 1;
+                    } else {
+                        return fibonacci(x - 1) + fibonacci(x - 2);
+                    }
+                };
 
-            let collect = fn(f, n) {
-                if (n == 0) {
-                    [f(0)]
-                } else {
-                    push(collect(f, n - 1), f(n))
-                }       
-            }
-
-            collect(fibonacci, 20);
+                fibonacci(20)
             "#;
 
-            let mut parser = Parser::new(Lexer::new(black_box(input)));
-            let ast = parser.parse_program().unwrap();
+            let program = parse::parse(input).unwrap();
 
-            let mut environment = Environment::default();
-            let _evaluated = ast.evaluate(&mut environment).unwrap();
+            let mut evaluator = Evaluator::new();
+            let _result = evaluator.evaluate(&program).unwrap();
         })
     });
 }
