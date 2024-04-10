@@ -46,13 +46,56 @@ impl Evaluator {
             res = self.evaluate_statement(stmt, &mut env)?;
 
             if let Object::Return(obj) = res {
-                // TODO: Collect garbage
+                self.collect_garbage();
                 return Ok((*obj).clone());
             }
         }
 
-        // TODO: Collect garbage
+        self.collect_garbage();
         Ok(res)
+    }
+
+    fn collect_garbage(&mut self) {
+        let mut used = HashSet::new();
+        Self::collect_used_environments(&self.environment, &mut used);
+
+        let mut to_remove = Vec::new();
+        for env in self.environment_owners.iter() {
+            if !used.contains(env) {
+                to_remove.push(env.clone());
+            }
+        }
+
+        for env in to_remove {
+            self.environment_owners.remove(&env);
+        }
+    }
+
+    fn collect_used_environments(env: &Environment, used: &mut HashSet<EnvironmentOwner>) {
+        let inserted = used.insert(
+            env.upgrade()
+                .expect("Trying to access a dropped environment"),
+        );
+        if !inserted {
+            return;
+        }
+
+        let env_rc = env
+            .0
+            .upgrade()
+            .expect("Trying to access a dropped environment");
+
+        for val in env_rc.borrow().store.values() {
+            Self::collect_used_environments_from_obj(val, used);
+        }
+    }
+
+    fn collect_used_environments_from_obj(obj: &Object, used: &mut HashSet<EnvironmentOwner>) {
+        match obj {
+            Object::Function(func) => Self::collect_used_environments(&func.environment, used),
+            Object::Return(obj) => Self::collect_used_environments_from_obj(obj, used),
+            _ => {}
+        }
     }
 
     fn evaluate_statement(

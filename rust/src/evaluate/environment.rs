@@ -4,8 +4,8 @@ use std::{cell::RefCell, collections::HashMap};
 use super::Object;
 
 #[derive(Debug)]
-struct EnvironmentInner {
-    store: HashMap<String, Object>,
+pub(super) struct EnvironmentInner {
+    pub(super) store: HashMap<String, Object>,
     outer: Option<Weak<RefCell<EnvironmentInner>>>,
 }
 
@@ -51,13 +51,13 @@ impl PartialEq for EnvironmentInner {
 }
 
 #[derive(Debug, Clone)]
-pub struct Environment(Weak<RefCell<EnvironmentInner>>);
+pub struct Environment(pub(super) Weak<RefCell<EnvironmentInner>>);
 
 /// Owner of the environment. Once this is dropped,
 /// the environment is dropped as well.
 /// Trying to access the environment after this is dropped
 /// will result in a panic.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EnvironmentOwner(Rc<RefCell<EnvironmentInner>>);
 
 impl PartialEq for EnvironmentOwner {
@@ -114,12 +114,8 @@ impl Environment {
         (Environment(env_weak), EnvironmentOwner(env))
     }
 
-    pub fn is_owned_by(&self, owner: &EnvironmentOwner) -> bool {
-        let Some(self_rc) = self.0.upgrade() else {
-            return false;
-        };
-
-        Rc::ptr_eq(&self_rc, &owner.0)
+    pub(super) fn upgrade(&self) -> Option<EnvironmentOwner> {
+        self.0.upgrade().map(EnvironmentOwner)
     }
 }
 

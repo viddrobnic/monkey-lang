@@ -12,19 +12,29 @@ pub fn main() !void {
         \\   }
         \\ };
         \\
-        \\ fibonacci(5);
+        \\ fibonacci(20);
     ;
 
     const allocator = std.heap.c_allocator;
 
-    const program = try parser.parse(input, allocator);
-    defer program.deinit();
+    var total_ns: u64 = 0;
 
-    var evaluator = try eval.Evaluator.init(allocator);
-    defer evaluator.deinit();
+    for (0..100) |_| {
+        var t = try std.time.Timer.start();
 
-    const res = try evaluator.evaluate(program);
-    std.debug.print("{}\n", .{res});
+        const program = try parser.parse(input, allocator);
+        defer program.deinit();
+
+        var evaluator = try eval.Evaluator.init(allocator);
+        defer evaluator.deinit();
+
+        _ = try evaluator.evaluate(program);
+
+        total_ns += t.read();
+    }
+
+    const average = total_ns / 100;
+    std.debug.print("Average: {}\n", .{std.fmt.fmtDuration(average)});
 }
 
 test {
