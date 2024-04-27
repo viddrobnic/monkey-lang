@@ -59,6 +59,7 @@ pub enum Expression {
     Identifier(String),
     IntegerLiteral(i64),
     BooleanLiteral(bool),
+    StringLiteral(String),
     PrefixOperator {
         operator: PrefixOperatorKind,
         right: Box<Expression>,
@@ -89,6 +90,7 @@ impl Expression {
             Self::Identifier(name) => name.clone(),
             Self::IntegerLiteral(value) => value.to_string(),
             Self::BooleanLiteral(value) => value.to_string(),
+            Self::StringLiteral(value) => value.clone(),
             Self::PrefixOperator { operator, right } => {
                 format!("({}{})", operator.debug_str(), right.debug_str())
             }

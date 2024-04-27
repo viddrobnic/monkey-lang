@@ -35,6 +35,30 @@ fn test_eval_integer() -> Result<()> {
 }
 
 #[test]
+fn test_eval_string() -> Result<()> {
+    let input = r#""Hello World!"#;
+
+    let program = parse::parse(input).unwrap();
+    let mut evaluator = Evaluator::new();
+    let result = evaluator.evaluate(&program)?;
+    assert_eq!(result, Object::String(String::from("Hello World!")));
+
+    Ok(())
+}
+
+#[test]
+fn test_string_concatenation() -> Result<()> {
+    let input = r#""Hello" + " " + "World!"#;
+
+    let program = parse::parse(input).unwrap();
+    let mut evaluator = Evaluator::new();
+    let result = evaluator.evaluate(&program)?;
+    assert_eq!(result, Object::String(String::from("Hello World!")));
+
+    Ok(())
+}
+
+#[test]
 fn test_eval_bool() -> Result<()> {
     let tests = [
         ("true", true),
@@ -188,6 +212,10 @@ fn test_error_handling() {
             Error::UnknownOperator("BOOLEAN + BOOLEAN".to_string()),
         ),
         ("foobar", Error::UnknownIdentifier("foobar".to_string())),
+        (
+            "\"Hello\" - \"World\"",
+            Error::UnknownOperator(String::from("STRING - STRING")),
+        ),
     ];
 
     for (input, expected) in tests {

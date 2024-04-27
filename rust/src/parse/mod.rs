@@ -137,6 +137,14 @@ impl Parser<'_> {
 
                 ast::Expression::Identifier(name)
             }
+            Some(Token::String(_)) => {
+                let string_token = self.current_token.take();
+                let Some(Token::String(value)) = string_token else {
+                    unreachable!();
+                };
+
+                ast::Expression::StringLiteral(value)
+            }
             Some(Token::Int(value)) => ast::Expression::IntegerLiteral(value.parse()?),
             Some(Token::Bang) | Some(Token::Minus) => self.parse_prefix_operator()?,
             Some(Token::True) => ast::Expression::BooleanLiteral(true),
@@ -465,6 +473,23 @@ mod test {
         };
 
         assert_eq!(literal, 5);
+        Ok(())
+    }
+
+    #[test]
+    fn test_string_literal_expression() -> Result<()> {
+        let input = r#""hello world""#;
+
+        let program = parse(input)?;
+        assert_eq!(program.statements.len(), 1);
+
+        let ast::Statement::Expression(ast::Expression::StringLiteral(ref literal)) =
+            program.statements[0]
+        else {
+            panic!("Expected string literal, got: {:?}", program.statements[0])
+        };
+
+        assert_eq!(literal, "hello world");
         Ok(())
     }
 

@@ -131,6 +131,7 @@ impl Evaluator {
 
                 Err(Error::UnknownIdentifier(ident.clone()))
             }
+            ast::Expression::StringLiteral(val) => Ok(Object::String(val.clone())),
             ast::Expression::IntegerLiteral(val) => Ok(Object::Integer(*val)),
             ast::Expression::BooleanLiteral(val) => Ok(Object::Boolean(*val)),
             ast::Expression::PrefixOperator { .. } => {
@@ -218,6 +219,26 @@ impl Evaluator {
                         operator.debug_str(),
                         right.data_type()
                     )))
+                }
+            };
+
+            return Ok(res);
+        }
+
+        if let (Object::String(left_str), Object::String(right_str)) = (&left, &right) {
+            let res = match operator {
+                ast::InfixOperatorKind::Add => {
+                    let mut res_str = left_str.to_string();
+                    res_str.push_str(right_str);
+                    Object::String(res_str)
+                }
+                _ => {
+                    return Err(Error::UnknownOperator(format!(
+                        "{} {} {}",
+                        left.data_type(),
+                        operator.debug_str(),
+                        right.data_type(),
+                    )));
                 }
             };
 
