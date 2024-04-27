@@ -11,7 +11,7 @@ pub enum Object {
     Return(Rc<Object>),
     Function(FunctionObject),
     Builtin(BuiltinFunction),
-    // Array(Vec<Object>),
+    Array(Vec<Object>),
     Null,
 }
 
@@ -24,14 +24,14 @@ impl Object {
             Object::Return(o) => o.inspect(),
             Object::Function(fun) => fun.inspect(),
             Object::Builtin(f) => format!("builtin function {:?}", f),
-            // Object::Array(arr) => {
-            //     let elements = arr
-            //         .iter()
-            //         .map(|obj| obj.inspect())
-            //         .collect::<Vec<String>>()
-            //         .join(", ");
-            //     format!("[{}]", elements)
-            // }
+            Object::Array(arr) => {
+                let elements = arr
+                    .iter()
+                    .map(|obj| obj.inspect())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("[{}]", elements)
+            }
             Object::Null => "null".to_string(),
         }
     }
@@ -48,7 +48,7 @@ impl Object {
             Object::Return(_) => "RETURN",
             Object::Function(_) => "FUNCTION",
             Object::Builtin(_) => "BUILTIN",
-            // Object::Array(_) => "ARRAY",
+            Object::Array(_) => "ARRAY",
             Object::Null => "NULL",
         }
     }

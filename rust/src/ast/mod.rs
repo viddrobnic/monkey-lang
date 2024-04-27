@@ -60,6 +60,7 @@ pub enum Expression {
     IntegerLiteral(i64),
     BooleanLiteral(bool),
     StringLiteral(String),
+    ArrayLiteral(Vec<Expression>),
     PrefixOperator {
         operator: PrefixOperatorKind,
         right: Box<Expression>,
@@ -82,6 +83,10 @@ pub enum Expression {
         function: Box<Expression>,
         arguments: Vec<Expression>,
     },
+    Index {
+        left: Box<Expression>,
+        index: Box<Expression>,
+    },
 }
 
 impl Expression {
@@ -91,6 +96,16 @@ impl Expression {
             Self::IntegerLiteral(value) => value.to_string(),
             Self::BooleanLiteral(value) => value.to_string(),
             Self::StringLiteral(value) => value.clone(),
+            Self::ArrayLiteral(value) => {
+                format!(
+                    "[{}]",
+                    value
+                        .iter()
+                        .map(|exp| exp.debug_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
             Self::PrefixOperator { operator, right } => {
                 format!("({}{})", operator.debug_str(), right.debug_str())
             }
@@ -128,6 +143,7 @@ impl Expression {
                     .join(", ");
                 format!("{}({})", function.debug_str(), args)
             }
+            Self::Index { left, index } => format!("({}[{}])", left.debug_str(), index.debug_str()),
         }
     }
 }

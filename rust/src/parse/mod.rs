@@ -150,6 +150,7 @@ impl Parser<'_> {
             Some(Token::True) => ast::Expression::BooleanLiteral(true),
             Some(Token::False) => ast::Expression::BooleanLiteral(false),
             Some(Token::Lparen) => self.parse_grouped()?,
+            Some(Token::LBracket) => self.parse_array_literal()?,
             Some(Token::If) => self.parse_if_expression()?,
             Some(Token::Function) => self.parse_function_literal()?,
             token => return Err(Error::NotAnExpression(token.clone())),
@@ -169,6 +170,7 @@ impl Parser<'_> {
             | Some(Token::Lt)
             | Some(Token::Gt) => self.parse_infix_operator(left)?,
             Some(Token::Lparen) => self.parse_call_expression(left)?,
+            Some(Token::LBracket) => self.parse_index_expression(left)?,
             _ => left,
         };
 
@@ -368,6 +370,26 @@ impl Parser<'_> {
         self.step();
 
         Ok(list)
+    }
+
+    fn parse_array_literal(&mut self) -> Result<ast::Expression> {
+        let elements = self.parse_expression_list(Token::RBracket)?;
+        Ok(ast::Expression::ArrayLiteral(elements))
+    }
+
+    fn parse_index_expression(&mut self, left: ast::Expression) -> Result<ast::Expression> {
+        self.step();
+        let index = self.parse_expression(Precedence::Lowest)?;
+
+        if self.peek_token != Some(Token::RBracket) {
+            return Err(Error::unexpected_token(&self.peek_token));
+        }
+        self.step();
+
+        Ok(ast::Expression::Index {
+            left: Box::new(left),
+            index: Box::new(index),
+        })
     }
 }
 
@@ -646,6 +668,14 @@ mod test {
                 "add(a + b + c * d / f + g)",
                 "add((((a + b) + ((c * d) / f)) + g));",
             ),
+            (
+                "a * [1,2,3,4][b*c]*d",
+                "((a * ([1, 2, 3, 4][(b * c)])) * d);",
+            ),
+            (
+                "add(a * b[2], b[1], 2 * [1, 2][1])",
+                "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])));",
+            ),
         ];
 
         for (input, expected) in tests {
@@ -849,6 +879,53 @@ mod test {
                 expected
             );
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_array_literal() -> Result<()> {
+        let input = "[1, 2 * 2, 3 + 3]";
+
+        let program = parse(input)?;
+        assert_eq!(program.statements.len(), 1);
+
+        let ast::Statement::Expression(ast::Expression::ArrayLiteral(ref arr)) =
+            program.statements[0]
+        else {
+            panic!("Expected array literal, got {:?}", program.statements[0])
+        };
+
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr[0].debug_str(), "1");
+        assert_eq!(arr[1].debug_str(), "(2 * 2)");
+        assert_eq!(arr[2].debug_str(), "(3 + 3)");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_index_expression() -> Result<()> {
+        let input = "myArray[1 + 1]";
+
+        let program = parse(input)?;
+        assert_eq!(program.statements.len(), 1);
+
+        let ast::Statement::Expression(ast::Expression::Index { left, index }) =
+            &program.statements[0]
+        else {
+            panic!("Expected index expression, got {:?}", program.statements[0])
+        };
+
+        assert_eq!(**left, ast::Expression::Identifier("myArray".to_string()));
+        assert_eq!(
+            **index,
+            ast::Expression::InfixOperator {
+                operator: ast::InfixOperatorKind::Add,
+                left: Box::new(ast::Expression::IntegerLiteral(1)),
+                right: Box::new(ast::Expression::IntegerLiteral(1))
+            }
+        );
 
         Ok(())
     }

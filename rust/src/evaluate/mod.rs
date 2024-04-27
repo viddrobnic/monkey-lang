@@ -140,6 +140,14 @@ impl Evaluator {
             ast::Expression::StringLiteral(val) => Ok(Object::String(val.clone())),
             ast::Expression::IntegerLiteral(val) => Ok(Object::Integer(*val)),
             ast::Expression::BooleanLiteral(val) => Ok(Object::Boolean(*val)),
+            ast::Expression::ArrayLiteral(arr) => {
+                let res: Result<Vec<_>> = arr
+                    .iter()
+                    .map(|expr| self.evaluate_expression(expr, environment))
+                    .collect();
+
+                Ok(Object::Array(res?))
+            }
             ast::Expression::PrefixOperator { .. } => {
                 self.evaluate_prefix_operator(expr, environment)
             }
@@ -155,6 +163,7 @@ impl Evaluator {
                 }))
             }
             ast::Expression::FunctionCall { .. } => self.evaluate_function_call(expr, environment),
+            ast::Expression::Index { .. } => self.evaluate_array_index(expr, environment),
         }
     }
 
@@ -347,6 +356,43 @@ impl Evaluator {
             Object::Builtin(builtin) => builtin.execute(args),
             _ => Err(Error::NotAFunction(function.data_type().to_string())),
         }
+    }
+
+    fn evaluate_array_index(
+        &mut self,
+        expr: &ast::Expression,
+        environment: &mut Environment,
+    ) -> Result<Object> {
+        let ast::Expression::Index { left, index } = expr else {
+            panic!("Expected Index expression, got {:?}", expr);
+        };
+
+        let left_obj = self.evaluate_expression(left, environment)?;
+        let index_obj = self.evaluate_expression(index, environment)?;
+
+        let Object::Integer(idx) = index_obj else {
+            return Err(Error::IndexOperatorNotSupported(
+                left_obj.data_type().to_string(),
+                index_obj.data_type().to_string(),
+            ));
+        };
+
+        let Object::Array(arr) = left_obj else {
+            return Err(Error::IndexOperatorNotSupported(
+                left_obj.data_type().to_string(),
+                index_obj.data_type().to_string(),
+            ));
+        };
+
+        if idx < 0 {
+            return Ok(Object::Null);
+        }
+
+        if idx as usize >= arr.len() {
+            return Ok(Object::Null);
+        }
+
+        Ok(arr[idx as usize].clone())
     }
 }
 

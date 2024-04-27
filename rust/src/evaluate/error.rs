@@ -12,6 +12,8 @@ pub enum Error {
     NotAFunction(String),
     #[error("wrong number of arguments: expected {expected}, got {got}")]
     WrongNumberOfArguments { expected: usize, got: usize },
+    #[error("index operator not supported: {0}[{1}]")]
+    IndexOperatorNotSupported(String, String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

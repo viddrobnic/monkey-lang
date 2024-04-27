@@ -321,6 +321,60 @@ fn test_recursion() {
 }
 
 #[test]
+fn test_array_literal() -> Result<()> {
+    let input = "[1, 2 * 2, 3 + 3]";
+
+    let program = parse::parse(input).unwrap();
+
+    let mut evaluator = Evaluator::new();
+    let res = evaluator.evaluate(&program)?;
+
+    assert_eq!(
+        res,
+        Object::Array(vec![
+            Object::Integer(1),
+            Object::Integer(4),
+            Object::Integer(6)
+        ])
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_array_index() -> Result<()> {
+    let tests = [
+        ("[1, 2, 3][0]", Object::Integer(1)),
+        ("[1, 2, 3][1]", Object::Integer(2)),
+        ("[1, 2, 3][2]", Object::Integer(3)),
+        ("let i = 0; [1][i];", Object::Integer(1)),
+        ("[1, 2, 3][1 + 1];", Object::Integer(3)),
+        ("let myArray = [1, 2, 3]; myArray[2];", Object::Integer(3)),
+        (
+            "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];",
+            Object::Integer(6),
+        ),
+        (
+            "let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]",
+            Object::Integer(2),
+        ),
+        ("[1,2,3][3]", Object::Null),
+        ("[1,2,3][-1]", Object::Null),
+    ];
+
+    for (input, expected) in tests {
+        let program = parse::parse(input).unwrap();
+
+        let mut evaluator = Evaluator::new();
+        let res = evaluator.evaluate(&program)?;
+
+        assert_eq!(res, expected);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_builtin_functions() {
     let tests = [
         ("len(\"\")", Ok(Object::Integer(0))),
