@@ -319,3 +319,27 @@ fn test_recursion() {
 
     assert_eq!(result, Object::Integer(5));
 }
+
+#[test]
+fn test_builtin_functions() {
+    let tests = [
+        ("len(\"\")", Ok(Object::Integer(0))),
+        ("len(\"four\")", Ok(Object::Integer(4))),
+        ("len(\"hello world\")", Ok(Object::Integer(11))),
+        ("len(1)", Err(Error::TypeMismatch("INTEGER".to_string()))),
+        (
+            "len(\"one\", \"two\")",
+            Err(Error::WrongNumberOfArguments {
+                expected: 1,
+                got: 2,
+            }),
+        ),
+    ];
+
+    for t in tests {
+        let program = parse::parse(t.0).unwrap();
+        let mut evaluator = Evaluator::new();
+        let res = evaluator.evaluate(&program);
+        assert_eq!(res, t.1);
+    }
+}

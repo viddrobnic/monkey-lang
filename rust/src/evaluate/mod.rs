@@ -1,3 +1,4 @@
+mod builtin;
 mod environment;
 mod error;
 mod object;
@@ -8,6 +9,7 @@ mod test;
 use std::collections::HashSet;
 use std::rc::Rc;
 
+use builtin::BuiltinFunction;
 use environment::*;
 
 pub use error::*;
@@ -128,6 +130,10 @@ impl Evaluator {
                 if let Some(val) = environment.get(ident) {
                     return Ok(val);
                 }
+
+                if let Some(val) = BuiltinFunction::from_ident(ident) {
+                    return Ok(Object::Builtin(val));
+                };
 
                 Err(Error::UnknownIdentifier(ident.clone()))
             }
@@ -338,6 +344,7 @@ impl Evaluator {
                     _ => Ok(evaluated),
                 }
             }
+            Object::Builtin(builtin) => builtin.execute(args),
             _ => Err(Error::NotAFunction(function.data_type().to_string())),
         }
     }
