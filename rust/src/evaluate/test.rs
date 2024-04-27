@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{
     evaluate::{Error, Evaluator, Object, Result},
     parse,
@@ -41,7 +43,10 @@ fn test_eval_string() -> Result<()> {
     let program = parse::parse(input).unwrap();
     let mut evaluator = Evaluator::new();
     let result = evaluator.evaluate(&program)?;
-    assert_eq!(result, Object::String(String::from("Hello World!")));
+    assert_eq!(
+        result,
+        Object::String(Rc::new(String::from("Hello World!")))
+    );
 
     Ok(())
 }
@@ -53,7 +58,10 @@ fn test_string_concatenation() -> Result<()> {
     let program = parse::parse(input).unwrap();
     let mut evaluator = Evaluator::new();
     let result = evaluator.evaluate(&program)?;
-    assert_eq!(result, Object::String(String::from("Hello World!")));
+    assert_eq!(
+        result,
+        Object::String(Rc::new(String::from("Hello World!")))
+    );
 
     Ok(())
 }
@@ -331,11 +339,11 @@ fn test_array_literal() -> Result<()> {
 
     assert_eq!(
         res,
-        Object::Array(vec![
+        Object::Array(Rc::new(vec![
             Object::Integer(1),
             Object::Integer(4),
             Object::Integer(6)
-        ])
+        ]))
     );
 
     Ok(())

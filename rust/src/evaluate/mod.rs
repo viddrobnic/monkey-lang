@@ -137,7 +137,7 @@ impl Evaluator {
 
                 Err(Error::UnknownIdentifier(ident.clone()))
             }
-            ast::Expression::StringLiteral(val) => Ok(Object::String(val.clone())),
+            ast::Expression::StringLiteral(val) => Ok(Object::String(Rc::new(val.clone()))),
             ast::Expression::IntegerLiteral(val) => Ok(Object::Integer(*val)),
             ast::Expression::BooleanLiteral(val) => Ok(Object::Boolean(*val)),
             ast::Expression::ArrayLiteral(arr) => {
@@ -146,7 +146,7 @@ impl Evaluator {
                     .map(|expr| self.evaluate_expression(expr, environment))
                     .collect();
 
-                Ok(Object::Array(res?))
+                Ok(Object::Array(Rc::new(res?)))
             }
             ast::Expression::PrefixOperator { .. } => {
                 self.evaluate_prefix_operator(expr, environment)
@@ -245,7 +245,7 @@ impl Evaluator {
                 ast::InfixOperatorKind::Add => {
                     let mut res_str = left_str.to_string();
                     res_str.push_str(right_str);
-                    Object::String(res_str)
+                    Object::String(Rc::new(res_str))
                 }
                 _ => {
                     return Err(Error::UnknownOperator(format!(

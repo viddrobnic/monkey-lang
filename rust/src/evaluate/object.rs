@@ -6,12 +6,12 @@ use std::rc::Rc;
 #[derive(Debug, PartialEq, Clone)]
 pub enum Object {
     Integer(i64),
-    String(String),
+    String(Rc<String>),
     Boolean(bool),
     Return(Rc<Object>),
     Function(FunctionObject),
     Builtin(BuiltinFunction),
-    Array(Vec<Object>),
+    Array(Rc<Vec<Object>>),
     Null,
 }
 
@@ -19,7 +19,7 @@ impl Object {
     pub fn inspect(&self) -> String {
         match self {
             Object::Integer(i) => i.to_string(),
-            Object::String(s) => s.clone(),
+            Object::String(s) => (**s).clone(),
             Object::Boolean(b) => b.to_string(),
             Object::Return(o) => o.inspect(),
             Object::Function(fun) => fun.inspect(),
