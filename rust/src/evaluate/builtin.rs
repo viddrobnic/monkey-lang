@@ -32,8 +32,7 @@ impl BuiltinFunction {
             BuiltinFunction::Last => Self::execute_last(args),
             BuiltinFunction::Rest => Self::execute_rest(args),
             BuiltinFunction::Push => Self::execute_push(args),
-            // BuiltinFunction::Puts => Self::execute_puts(args),
-            _ => todo!(),
+            BuiltinFunction::Puts => Self::execute_puts(args),
         }
     }
 
@@ -126,10 +125,10 @@ impl BuiltinFunction {
         Ok(Object::Array(Rc::new(new_arr)))
     }
 
-    // fn execute_puts(args: Vec<Object>) -> evaluate::Result<Object> {
-    //     for arg in args {
-    //         println!("{}", arg.inspect());
-    //     }
-    //     Ok(Object::Null)
-    // }
+    fn execute_puts(args: Vec<Object>) -> Result<Object> {
+        for arg in args {
+            println!("{}", arg.inspect());
+        }
+        Ok(Object::Null)
+    }
 }
