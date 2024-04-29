@@ -14,6 +14,8 @@ pub enum Error {
     WrongNumberOfArguments { expected: usize, got: usize },
     #[error("index operator not supported: {0}[{1}]")]
     IndexOperatorNotSupported(String, String),
+    #[error("not hashable: {0}")]
+    NotHashable(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

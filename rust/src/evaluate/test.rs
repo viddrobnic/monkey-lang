@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    evaluate::{Error, Evaluator, Object, Result},
+    evaluate::{Error, Evaluator, HashKey, Object, Result},
     parse,
 };
 
@@ -224,6 +224,10 @@ fn test_error_handling() {
             "\"Hello\" - \"World\"",
             Error::UnknownOperator(String::from("STRING - STRING")),
         ),
+        (
+            r#"{"name": "Monkey"}[fn(x) { x }];"#,
+            Error::NotHashable("FUNCTION".to_string()),
+        ),
     ];
 
     for (input, expected) in tests {
@@ -350,6 +354,53 @@ fn test_array_literal() -> Result<()> {
 }
 
 #[test]
+fn test_hash_literal() -> Result<()> {
+    let input = r#"
+        let two = "two";
+        {
+            "one": 10 - 9,
+            two: 1 + 1,
+            "thr" + "ee": 6 / 2,
+            4: 4,
+            true: 5,
+            false: 6
+        }"#;
+
+    let program = parse::parse(input).unwrap();
+
+    let mut evaluator = Evaluator::new();
+    let res = evaluator.evaluate(&program)?;
+
+    let Object::HashMap(map) = res else {
+        panic!("Expected hash map, got: {:?}", res);
+    };
+
+    let expected = [
+        (
+            HashKey::String(Rc::new("one".to_string())),
+            Object::Integer(1),
+        ),
+        (
+            HashKey::String(Rc::new("two".to_string())),
+            Object::Integer(2),
+        ),
+        (
+            HashKey::String(Rc::new("three".to_string())),
+            Object::Integer(3),
+        ),
+        (HashKey::Integer(4), Object::Integer(4)),
+        (HashKey::Boolean(true), Object::Integer(5)),
+        (HashKey::Boolean(false), Object::Integer(6)),
+    ];
+
+    for (key, value) in expected.iter() {
+        assert_eq!(map.get(key), Some(value));
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_array_index() -> Result<()> {
     let tests = [
         ("[1, 2, 3][0]", Object::Integer(1)),
@@ -368,6 +419,30 @@ fn test_array_index() -> Result<()> {
         ),
         ("[1,2,3][3]", Object::Null),
         ("[1,2,3][-1]", Object::Null),
+    ];
+
+    for (input, expected) in tests {
+        let program = parse::parse(input).unwrap();
+
+        let mut evaluator = Evaluator::new();
+        let res = evaluator.evaluate(&program)?;
+
+        assert_eq!(res, expected);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_hash_index() -> Result<()> {
+    let tests = [
+        (r#"{"foo": 5}["foo"]"#, Object::Integer(5)),
+        (r#"{"foo": 5}["bar"]"#, Object::Null),
+        (r#"let key = "foo"; {"foo": 5}[key]"#, Object::Integer(5)),
+        (r#"{}["foo"]"#, Object::Null),
+        (r#"{5:5}[5]"#, Object::Integer(5)),
+        (r#"{true : 5}[true]"#, Object::Integer(5)),
+        (r#"{false: 5}[false]"#, Object::Integer(5)),
     ];
 
     for (input, expected) in tests {

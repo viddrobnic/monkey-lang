@@ -55,12 +55,19 @@ impl BlockStatement {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct HashLiteralPair {
+    pub key: Expression,
+    pub value: Expression,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Expression {
     Identifier(String),
     IntegerLiteral(i64),
     BooleanLiteral(bool),
     StringLiteral(String),
     ArrayLiteral(Vec<Expression>),
+    HashLiteral(Vec<HashLiteralPair>),
     PrefixOperator {
         operator: PrefixOperatorKind,
         right: Box<Expression>,
@@ -102,6 +109,16 @@ impl Expression {
                     value
                         .iter()
                         .map(|exp| exp.debug_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            Self::HashLiteral(pairs) => {
+                format!(
+                    "{{{}}}",
+                    pairs
+                        .iter()
+                        .map(|pair| format!("{}: {}", pair.key.debug_str(), pair.value.debug_str()))
                         .collect::<Vec<_>>()
                         .join(", ")
                 )

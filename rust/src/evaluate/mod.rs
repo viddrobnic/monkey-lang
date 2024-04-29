@@ -6,7 +6,7 @@ mod object;
 #[cfg(test)]
 mod test;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use builtin::BuiltinFunction;
@@ -148,6 +148,7 @@ impl Evaluator {
 
                 Ok(Object::Array(Rc::new(res?)))
             }
+            &ast::Expression::HashLiteral(_) => self.evaluate_hash_literal(expr, environment),
             ast::Expression::PrefixOperator { .. } => {
                 self.evaluate_prefix_operator(expr, environment)
             }
@@ -163,7 +164,7 @@ impl Evaluator {
                 }))
             }
             ast::Expression::FunctionCall { .. } => self.evaluate_function_call(expr, environment),
-            ast::Expression::Index { .. } => self.evaluate_array_index(expr, environment),
+            ast::Expression::Index { .. } => self.evaluate_index(expr, environment),
         }
     }
 
@@ -358,7 +359,28 @@ impl Evaluator {
         }
     }
 
-    fn evaluate_array_index(
+    fn evaluate_hash_literal(
+        &mut self,
+        expr: &ast::Expression,
+        environment: &mut Environment,
+    ) -> Result<Object> {
+        let ast::Expression::HashLiteral(pairs) = expr else {
+            panic!("Expected HashLiteral expression, got: {:?}", expr);
+        };
+
+        let mut res = HashMap::new();
+
+        for pair in pairs {
+            let key = self.evaluate_expression(&pair.key, environment)?;
+            let value = self.evaluate_expression(&pair.value, environment)?;
+
+            res.insert(key.try_into()?, value);
+        }
+
+        Ok(Object::HashMap(Rc::new(res)))
+    }
+
+    fn evaluate_index(
         &mut self,
         expr: &ast::Expression,
         environment: &mut Environment,
@@ -370,29 +392,39 @@ impl Evaluator {
         let left_obj = self.evaluate_expression(left, environment)?;
         let index_obj = self.evaluate_expression(index, environment)?;
 
-        let Object::Integer(idx) = index_obj else {
-            return Err(Error::IndexOperatorNotSupported(
-                left_obj.data_type().to_string(),
-                index_obj.data_type().to_string(),
-            ));
-        };
+        match &left_obj {
+            Object::Array(arr) => {
+                let Object::Integer(idx) = index_obj else {
+                    return Err(Error::IndexOperatorNotSupported(
+                        left_obj.data_type().to_string(),
+                        index_obj.data_type().to_string(),
+                    ));
+                };
 
-        let Object::Array(arr) = left_obj else {
-            return Err(Error::IndexOperatorNotSupported(
-                left_obj.data_type().to_string(),
-                index_obj.data_type().to_string(),
-            ));
-        };
+                if idx < 0 {
+                    return Ok(Object::Null);
+                }
 
-        if idx < 0 {
-            return Ok(Object::Null);
+                if idx as usize >= arr.len() {
+                    return Ok(Object::Null);
+                }
+
+                Ok(arr[idx as usize].clone())
+            }
+            Object::HashMap(map) => {
+                let key = index_obj.try_into()?;
+                match map.get(&key) {
+                    Some(obj) => Ok(obj.clone()),
+                    None => Ok(Object::Null),
+                }
+            }
+            _ => {
+                return Err(Error::IndexOperatorNotSupported(
+                    left_obj.data_type().to_string(),
+                    index_obj.data_type().to_string(),
+                ))
+            }
         }
-
-        if idx as usize >= arr.len() {
-            return Ok(Object::Null);
-        }
-
-        Ok(arr[idx as usize].clone())
     }
 }
 

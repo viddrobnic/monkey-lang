@@ -151,6 +151,7 @@ impl Parser<'_> {
             Some(Token::False) => ast::Expression::BooleanLiteral(false),
             Some(Token::Lparen) => self.parse_grouped()?,
             Some(Token::LBracket) => self.parse_array_literal()?,
+            Some(Token::Lsquigly) => self.parse_hash_literal()?,
             Some(Token::If) => self.parse_if_expression()?,
             Some(Token::Function) => self.parse_function_literal()?,
             token => return Err(Error::NotAnExpression(token.clone())),
@@ -375,6 +376,37 @@ impl Parser<'_> {
     fn parse_array_literal(&mut self) -> Result<ast::Expression> {
         let elements = self.parse_expression_list(Token::RBracket)?;
         Ok(ast::Expression::ArrayLiteral(elements))
+    }
+
+    fn parse_hash_literal(&mut self) -> Result<ast::Expression> {
+        let mut pairs = Vec::new();
+        while self.peek_token != Some(Token::Rsquigly) {
+            self.step();
+            let key = self.parse_expression(Precedence::Lowest)?;
+
+            if self.peek_token != Some(Token::Colon) {
+                return Err(Error::unexpected_token(&self.peek_token));
+            }
+            self.step();
+            self.step();
+
+            let value = self.parse_expression(Precedence::Lowest)?;
+
+            pairs.push(ast::HashLiteralPair { key, value });
+
+            match &self.peek_token {
+                Some(Token::Rsquigly) => (),
+                Some(Token::Comma) => self.step(),
+                token => return Err(Error::unexpected_token(token)),
+            }
+        }
+
+        if self.peek_token != Some(Token::Rsquigly) {
+            return Err(Error::unexpected_token(&self.peek_token));
+        }
+        self.step();
+
+        Ok(ast::Expression::HashLiteral(pairs))
     }
 
     fn parse_index_expression(&mut self, left: ast::Expression) -> Result<ast::Expression> {
@@ -900,6 +932,74 @@ mod test {
         assert_eq!(arr[0].debug_str(), "1");
         assert_eq!(arr[1].debug_str(), "(2 * 2)");
         assert_eq!(arr[2].debug_str(), "(3 + 3)");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_hash_literal() -> Result<()> {
+        let tests = [
+            ("{}", vec![]),
+            (
+                r#"{"one": 1, "two": 2, "three": 3}"#,
+                vec![
+                    ast::HashLiteralPair {
+                        key: ast::Expression::StringLiteral("one".to_string()),
+                        value: ast::Expression::IntegerLiteral(1),
+                    },
+                    ast::HashLiteralPair {
+                        key: ast::Expression::StringLiteral("two".to_string()),
+                        value: ast::Expression::IntegerLiteral(2),
+                    },
+                    ast::HashLiteralPair {
+                        key: ast::Expression::StringLiteral("three".to_string()),
+                        value: ast::Expression::IntegerLiteral(3),
+                    },
+                ],
+            ),
+            (
+                r#"{"one": 0 + 1, "two": 10 - 8, "three": 15 / 5}"#,
+                vec![
+                    ast::HashLiteralPair {
+                        key: ast::Expression::StringLiteral("one".to_string()),
+                        value: ast::Expression::InfixOperator {
+                            operator: ast::InfixOperatorKind::Add,
+                            left: Box::new(ast::Expression::IntegerLiteral(0)),
+                            right: Box::new(ast::Expression::IntegerLiteral(1)),
+                        },
+                    },
+                    ast::HashLiteralPair {
+                        key: ast::Expression::StringLiteral("two".to_string()),
+                        value: ast::Expression::InfixOperator {
+                            operator: ast::InfixOperatorKind::Subtract,
+                            left: Box::new(ast::Expression::IntegerLiteral(10)),
+                            right: Box::new(ast::Expression::IntegerLiteral(8)),
+                        },
+                    },
+                    ast::HashLiteralPair {
+                        key: ast::Expression::StringLiteral("three".to_string()),
+                        value: ast::Expression::InfixOperator {
+                            operator: ast::InfixOperatorKind::Divide,
+                            left: Box::new(ast::Expression::IntegerLiteral(15)),
+                            right: Box::new(ast::Expression::IntegerLiteral(5)),
+                        },
+                    },
+                ],
+            ),
+        ];
+
+        for (input, expected) in tests {
+            let program = parse(input)?;
+            assert_eq!(program.statements.len(), 1);
+
+            let ast::Statement::Expression(ast::Expression::HashLiteral(hash_lit)) =
+                &program.statements[0]
+            else {
+                panic!("Expected hash literal, got {:?}", program.statements[0]);
+            };
+
+            assert_eq!(*hash_lit, expected);
+        }
 
         Ok(())
     }

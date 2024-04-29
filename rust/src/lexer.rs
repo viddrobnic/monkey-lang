@@ -90,6 +90,7 @@ impl Iterator for Lexer<'_> {
                 _ => Token::Assign,
             },
             b';' => Token::Semicolon,
+            b':' => Token::Colon,
             b'(' => Token::Lparen,
             b')' => Token::Rparen,
             b',' => Token::Comma,
@@ -165,6 +166,7 @@ if (5 < 10) {
 "foobar"
 "foo bar"
 [1, 2];
+{"foo": "bar"}
 "#;
 
         let expected_values = vec![
@@ -249,6 +251,11 @@ if (5 < 10) {
             Token::Int("2".to_string()),
             Token::RBracket,
             Token::Semicolon,
+            Token::Lsquigly,
+            Token::String("foo".to_string()),
+            Token::Colon,
+            Token::String("bar".to_string()),
+            Token::Rsquigly,
         ];
 
         let lexer = Lexer::new(input);

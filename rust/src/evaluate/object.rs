@@ -1,7 +1,7 @@
-use super::{builtin::BuiltinFunction, environment::Environment};
+use super::{builtin::BuiltinFunction, environment::Environment, Error};
 use crate::ast;
 
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Object {
@@ -12,6 +12,7 @@ pub enum Object {
     Function(FunctionObject),
     Builtin(BuiltinFunction),
     Array(Rc<Vec<Object>>),
+    HashMap(Rc<HashMap<HashKey, Object>>),
     Null,
 }
 
@@ -32,6 +33,15 @@ impl Object {
                     .join(", ");
                 format!("[{}]", elements)
             }
+            Object::HashMap(map) => {
+                let elements = map
+                    .iter()
+                    .map(|(key, value)| format!("{}: {}", key.inspect(), value.inspect()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                format!("{{{}}}", elements)
+            }
             Object::Null => "null".to_string(),
         }
     }
@@ -49,6 +59,7 @@ impl Object {
             Object::Function(_) => "FUNCTION",
             Object::Builtin(_) => "BUILTIN",
             Object::Array(_) => "ARRAY",
+            Object::HashMap(_) => "HASH_MAP",
             Object::Null => "NULL",
         }
     }
@@ -68,5 +79,35 @@ impl FunctionObject {
             self.parameters.join(", "),
             self.body.debug_str(),
         )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum HashKey {
+    String(Rc<String>),
+    Integer(i64),
+    Boolean(bool),
+}
+
+impl HashKey {
+    fn inspect(&self) -> String {
+        match self {
+            Self::String(s) => (**s).clone(),
+            Self::Integer(i) => i.to_string(),
+            Self::Boolean(b) => b.to_string(),
+        }
+    }
+}
+
+impl TryFrom<Object> for HashKey {
+    type Error = Error;
+
+    fn try_from(value: Object) -> Result<Self, Self::Error> {
+        match value {
+            Object::String(str) => Ok(Self::String(str)),
+            Object::Integer(i) => Ok(Self::Integer(i)),
+            Object::Boolean(b) => Ok(Self::Boolean(b)),
+            _ => Err(Error::NotHashable(value.data_type().to_string())),
+        }
     }
 }
