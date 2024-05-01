@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use monkey_lang::{evaluate::Evaluator, parse};
+use monkey::{evaluate::Evaluator, parse};
 
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("fib 20", |b| {

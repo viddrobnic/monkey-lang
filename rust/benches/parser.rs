@@ -13,7 +13,7 @@ fn parser_benchmark(c: &mut Criterion) {
                 };
             "#;
 
-            let _program = monkey_lang::parse::parse(input).unwrap();
+            let _program = monkey::parse::parse(input).unwrap();
         });
     });
 }
