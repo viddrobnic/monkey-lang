@@ -1,11 +1,11 @@
-mod ast;
-mod code;
-mod lexer;
-mod token;
-
+pub mod ast;
+pub mod code;
 pub mod compile;
 pub mod environment;
 pub mod evaluate;
+pub mod lexer;
 pub mod object;
 pub mod parse;
 pub mod repl;
+pub mod token;
+pub mod vm;

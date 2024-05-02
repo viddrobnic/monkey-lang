@@ -5,6 +5,11 @@ use crate::object;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Instruction {
     Constant(u16),
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Pop,
 }
 
 #[derive(Debug, PartialEq)]

@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use monkey::{evaluate::Evaluator, parse};
 
 fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("fib 20", |b| {
+    c.bench_function("fib 30", |b| {
         b.iter(|| {
             let input = r#"
                 let fibonacci = fn(x) {
@@ -13,7 +13,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                     }
                 };
 
-                fibonacci(20)
+                fibonacci(30)
             "#;
 
             let program = parse::parse(input).unwrap();
