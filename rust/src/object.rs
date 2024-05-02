@@ -1,5 +1,4 @@
-use super::{builtin::BuiltinFunction, environment::Environment, Error};
-use crate::ast;
+use crate::{ast, environment::Environment};
 
 use std::{collections::HashMap, rc::Rc};
 
@@ -100,14 +99,38 @@ impl HashKey {
 }
 
 impl TryFrom<Object> for HashKey {
-    type Error = Error;
+    type Error = String;
 
     fn try_from(value: Object) -> Result<Self, Self::Error> {
         match value {
             Object::String(str) => Ok(Self::String(str)),
             Object::Integer(i) => Ok(Self::Integer(i)),
             Object::Boolean(b) => Ok(Self::Boolean(b)),
-            _ => Err(Error::NotHashable(value.data_type().to_string())),
+            _ => Err(value.data_type().to_string()),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum BuiltinFunction {
+    Len,
+    First,
+    Last,
+    Rest,
+    Push,
+    Puts,
+}
+
+impl BuiltinFunction {
+    pub(crate) fn from_ident(ident: &str) -> Option<Self> {
+        match ident {
+            "len" => Some(Self::Len),
+            "first" => Some(Self::First),
+            "last" => Some(Self::Last),
+            "rest" => Some(Self::Rest),
+            "push" => Some(Self::Push),
+            "puts" => Some(Self::Puts),
+            _ => None,
         }
     }
 }

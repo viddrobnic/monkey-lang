@@ -1,7 +1,7 @@
 use std::rc::{Rc, Weak};
 use std::{cell::RefCell, collections::HashMap};
 
-use super::Object;
+use crate::object::Object;
 
 #[derive(Debug)]
 pub(super) struct EnvironmentInner {

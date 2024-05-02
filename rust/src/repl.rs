@@ -3,10 +3,7 @@ use std::{
     io::{self, BufRead},
 };
 
-use crate::{
-    evaluate::{Evaluator, Object},
-    parse,
-};
+use crate::{evaluate::Evaluator, object::Object, parse};
 
 const PROMPT: &str = ">> ";
 

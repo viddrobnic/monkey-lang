@@ -1,7 +1,5 @@
 mod builtin;
-mod environment;
 mod error;
-mod object;
 
 #[cfg(test)]
 mod test;
@@ -9,13 +7,11 @@ mod test;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use builtin::BuiltinFunction;
-use environment::*;
+use crate::ast;
+use crate::environment::{Environment, EnvironmentOwner};
+use crate::object::*;
 
 pub use error::*;
-pub use object::*;
-
-use crate::ast;
 
 pub struct Evaluator {
     environment: Environment,
@@ -354,7 +350,7 @@ impl Evaluator {
                     _ => Ok(evaluated),
                 }
             }
-            Object::Builtin(builtin) => builtin.execute(args),
+            Object::Builtin(fun) => builtin::execute(&fun, args),
             _ => Err(Error::NotAFunction(function.data_type().to_string())),
         }
     }
@@ -374,7 +370,10 @@ impl Evaluator {
             let key = self.evaluate_expression(&pair.key, environment)?;
             let value = self.evaluate_expression(&pair.value, environment)?;
 
-            res.insert(key.try_into()?, value);
+            res.insert(
+                key.try_into().map_err(|err| Error::NotHashable(err))?,
+                value,
+            );
         }
 
         Ok(Object::HashMap(Rc::new(res)))
@@ -412,7 +411,9 @@ impl Evaluator {
                 Ok(arr[idx as usize].clone())
             }
             Object::HashMap(map) => {
-                let key = index_obj.try_into()?;
+                let key = index_obj
+                    .try_into()
+                    .map_err(|err| Error::NotHashable(err))?;
                 match map.get(&key) {
                     Some(obj) => Ok(obj.clone()),
                     None => Ok(Object::Null),
