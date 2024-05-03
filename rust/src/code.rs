@@ -10,6 +10,11 @@ pub enum Instruction {
     Mul,
     Div,
     Pop,
+    True,
+    False,
+    Equal,
+    NotEqual,
+    GreaterThan,
 }
 
 #[derive(Debug, PartialEq)]

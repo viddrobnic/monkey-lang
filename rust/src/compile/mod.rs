@@ -56,7 +56,13 @@ impl Compiler {
                 let const_idx = self.add_constant(Object::Integer(*val));
                 self.emit(Instruction::Constant(const_idx as u16));
             }
-            ast::Expression::BooleanLiteral(_) => todo!(),
+            ast::Expression::BooleanLiteral(val) => {
+                if *val {
+                    self.emit(Instruction::True);
+                } else {
+                    self.emit(Instruction::False);
+                }
+            }
             ast::Expression::StringLiteral(_) => todo!(),
             ast::Expression::ArrayLiteral(_) => todo!(),
             ast::Expression::HashLiteral(_) => todo!(),
@@ -66,6 +72,13 @@ impl Compiler {
                 right,
                 operator,
             } => {
+                if *operator == ast::InfixOperatorKind::LessThan {
+                    self.compile_expression(right);
+                    self.compile_expression(left);
+                    self.emit(Instruction::GreaterThan);
+                    return;
+                }
+
                 self.compile_expression(left);
                 self.compile_expression(right);
 
@@ -74,7 +87,10 @@ impl Compiler {
                     ast::InfixOperatorKind::Subtract => self.emit(Instruction::Sub),
                     ast::InfixOperatorKind::Multiply => self.emit(Instruction::Mul),
                     ast::InfixOperatorKind::Divide => self.emit(Instruction::Div),
-                    _ => todo!(),
+                    ast::InfixOperatorKind::Equal => self.emit(Instruction::Equal),
+                    ast::InfixOperatorKind::NotEqual => self.emit(Instruction::NotEqual),
+                    ast::InfixOperatorKind::GreaterThan => self.emit(Instruction::GreaterThan),
+                    ast::InfixOperatorKind::LessThan => unreachable!(),
                 };
             }
             ast::Expression::If { .. } => todo!(),

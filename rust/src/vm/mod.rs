@@ -1,8 +1,11 @@
 #[cfg(test)]
 mod test;
 
+pub mod error;
+
 use crate::code::{Bytecode, Instruction};
 use crate::object::Object;
+pub use error::*;
 
 const STACK_SIZE: usize = 2048;
 
@@ -38,14 +41,14 @@ impl VirtualMachine<'_> {
         &self.stack[self.sp]
     }
 
-    fn push(&mut self, obj: Object) {
+    fn push(&mut self, obj: Object) -> Result<()> {
         if self.sp >= self.stack.len() {
-            // TODO: Return error
-            panic!("Stack overflow");
+            return Err(Error::StackOverflow);
         }
 
         self.stack[self.sp] = obj;
         self.sp += 1;
+        Ok(())
     }
 
     fn pop(&mut self) -> Object {
@@ -53,40 +56,50 @@ impl VirtualMachine<'_> {
         self.stack[self.sp].clone()
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> Result<()> {
         for inst in &self.bytecode.instructions {
             match inst {
                 Instruction::Constant(idx) => {
-                    self.push(self.bytecode.constants[*idx as usize].clone());
+                    self.push(self.bytecode.constants[*idx as usize].clone())?
                 }
                 Instruction::Add | Instruction::Mul | Instruction::Sub | Instruction::Div => {
-                    self.execute_binary_operation(*inst);
+                    self.execute_binary_operation(*inst)?;
                 }
+                Instruction::Equal | Instruction::NotEqual | Instruction::GreaterThan => {
+                    self.execute_comparison(*inst)?;
+                }
+                Instruction::True => self.push(Object::Boolean(true))?,
+                Instruction::False => self.push(Object::Boolean(false))?,
                 Instruction::Pop => {
                     self.pop();
                 }
             }
         }
+
+        Ok(())
     }
 
-    fn execute_binary_operation(&mut self, instruction: Instruction) {
+    fn execute_binary_operation(&mut self, instruction: Instruction) -> Result<()> {
         let right = self.pop();
         let left = self.pop();
 
         if let (Object::Integer(left), Object::Integer(right)) = (&left, &right) {
-            self.execute_binary_integer_operation(instruction, *left, *right);
-            return;
+            return self.execute_binary_integer_operation(instruction, *left, *right);
         };
 
-        // TODO: Use errors
-        panic!(
-            "unsupported types for binary operations: {}, {}",
-            left.data_type(),
-            right.data_type()
-        );
+        Err(Error::UnknownOperator(
+            instruction,
+            left.data_type().to_string(),
+            right.data_type().to_string(),
+        ))
     }
 
-    fn execute_binary_integer_operation(&mut self, operation: Instruction, left: i64, right: i64) {
+    fn execute_binary_integer_operation(
+        &mut self,
+        operation: Instruction,
+        left: i64,
+        right: i64,
+    ) -> Result<()> {
         let res = match operation {
             Instruction::Add => left + right,
             Instruction::Sub => left - right,
@@ -96,5 +109,40 @@ impl VirtualMachine<'_> {
         };
 
         self.push(Object::Integer(res))
+    }
+
+    fn execute_comparison(&mut self, instruction: Instruction) -> Result<()> {
+        let right = self.pop();
+        let left = self.pop();
+
+        if let (Object::Integer(left), Object::Integer(right)) = (&left, &right) {
+            return self.execute_integer_comparison(instruction, *left, *right);
+        }
+
+        match instruction {
+            Instruction::Equal => self.push(Object::Boolean(left == right)),
+            Instruction::NotEqual => self.push(Object::Boolean(left != right)),
+            _ => Err(Error::UnknownOperator(
+                instruction,
+                left.data_type().to_string(),
+                right.data_type().to_string(),
+            )),
+        }
+    }
+
+    fn execute_integer_comparison(
+        &mut self,
+        operation: Instruction,
+        left: i64,
+        right: i64,
+    ) -> Result<()> {
+        let res = match operation {
+            Instruction::Equal => left == right,
+            Instruction::NotEqual => left != right,
+            Instruction::GreaterThan => left > right,
+            _ => unreachable!(),
+        };
+
+        self.push(Object::Boolean(res))
     }
 }
