@@ -73,6 +73,8 @@ impl VirtualMachine<'_> {
                 Instruction::Pop => {
                     self.pop();
                 }
+                Instruction::Bang => self.execute_bang_operator()?,
+                Instruction::Minus => self.execute_minus_operator()?,
             }
         }
 
@@ -87,7 +89,7 @@ impl VirtualMachine<'_> {
             return self.execute_binary_integer_operation(instruction, *left, *right);
         };
 
-        Err(Error::UnknownOperator(
+        Err(Error::UnknownBinaryOperator(
             instruction,
             left.data_type().to_string(),
             right.data_type().to_string(),
@@ -122,7 +124,7 @@ impl VirtualMachine<'_> {
         match instruction {
             Instruction::Equal => self.push(Object::Boolean(left == right)),
             Instruction::NotEqual => self.push(Object::Boolean(left != right)),
-            _ => Err(Error::UnknownOperator(
+            _ => Err(Error::UnknownBinaryOperator(
                 instruction,
                 left.data_type().to_string(),
                 right.data_type().to_string(),
@@ -144,5 +146,27 @@ impl VirtualMachine<'_> {
         };
 
         self.push(Object::Boolean(res))
+    }
+
+    fn execute_bang_operator(&mut self) -> Result<()> {
+        let operand = self.pop();
+
+        match operand {
+            Object::Boolean(b) => self.push(Object::Boolean(!b)),
+            Object::Null => self.push(Object::Boolean(true)),
+            _ => self.push(Object::Boolean(false)),
+        }
+    }
+
+    fn execute_minus_operator(&mut self) -> Result<()> {
+        let operand = self.pop();
+
+        let Object::Integer(value) = operand else {
+            return Err(Error::UnsupportedNegationType(
+                operand.data_type().to_string(),
+            ));
+        };
+
+        self.push(Object::Integer(-value))
     }
 }

@@ -66,7 +66,13 @@ impl Compiler {
             ast::Expression::StringLiteral(_) => todo!(),
             ast::Expression::ArrayLiteral(_) => todo!(),
             ast::Expression::HashLiteral(_) => todo!(),
-            ast::Expression::PrefixOperator { .. } => todo!(),
+            ast::Expression::PrefixOperator { operator, right } => {
+                self.compile_expression(right);
+                match operator {
+                    ast::PrefixOperatorKind::Not => self.emit(Instruction::Bang),
+                    ast::PrefixOperatorKind::Negative => self.emit(Instruction::Minus),
+                };
+            }
             ast::Expression::InfixOperator {
                 left,
                 right,

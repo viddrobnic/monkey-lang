@@ -17,6 +17,10 @@ fn test_integer_arithmetic() -> Result<()> {
         ("5 * 2 + 10", Object::Integer(20)),
         ("5 + 2 * 10", Object::Integer(25)),
         ("5 * (2 + 10)", Object::Integer(60)),
+        ("-5", Object::Integer(-5)),
+        ("-10", Object::Integer(-10)),
+        ("-50 + 100 + -50", Object::Integer(0)),
+        ("(5 + 10 * 2 + 15 / 3) * 2 + -10", Object::Integer(50)),
     ];
 
     for (input, expected) in tests {
@@ -54,6 +58,12 @@ fn test_boolean_expression() -> Result<()> {
         ("(1 < 2) == false", Object::Boolean(false)),
         ("(1 > 2) == true", Object::Boolean(false)),
         ("(1 > 2) == false", Object::Boolean(true)),
+        ("!true", Object::Boolean(false)),
+        ("!false", Object::Boolean(true)),
+        ("!5", Object::Boolean(false)),
+        ("!!true", Object::Boolean(true)),
+        ("!!false", Object::Boolean(false)),
+        ("!!5", Object::Boolean(true)),
     ];
 
     for (input, expected) in tests {

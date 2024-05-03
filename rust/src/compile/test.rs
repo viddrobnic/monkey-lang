@@ -61,6 +61,17 @@ fn test_integer_arithemtic() {
                 ],
             },
         },
+        TestCase {
+            input: "-1",
+            expected: Bytecode {
+                constants: vec![Object::Integer(1)],
+                instructions: vec![
+                    Instruction::Constant(0),
+                    Instruction::Minus,
+                    Instruction::Pop,
+                ],
+            },
+        },
     ];
 
     for case in tests {
@@ -158,6 +169,13 @@ fn test_boolean_expression() {
                     Instruction::NotEqual,
                     Instruction::Pop,
                 ],
+            },
+        },
+        TestCase {
+            input: "!true",
+            expected: Bytecode {
+                constants: vec![],
+                instructions: vec![Instruction::True, Instruction::Bang, Instruction::Pop],
             },
         },
     ];

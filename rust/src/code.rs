@@ -15,6 +15,8 @@ pub enum Instruction {
     Equal,
     NotEqual,
     GreaterThan,
+    Minus,
+    Bang,
 }
 
 #[derive(Debug, PartialEq)]
