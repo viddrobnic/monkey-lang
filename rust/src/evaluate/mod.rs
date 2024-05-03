@@ -370,10 +370,7 @@ impl Evaluator {
             let key = self.evaluate_expression(&pair.key, environment)?;
             let value = self.evaluate_expression(&pair.value, environment)?;
 
-            res.insert(
-                key.try_into().map_err(|err| Error::NotHashable(err))?,
-                value,
-            );
+            res.insert(key.try_into().map_err(Error::NotHashable)?, value);
         }
 
         Ok(Object::HashMap(Rc::new(res)))
@@ -411,9 +408,7 @@ impl Evaluator {
                 Ok(arr[idx as usize].clone())
             }
             Object::HashMap(map) => {
-                let key = index_obj
-                    .try_into()
-                    .map_err(|err| Error::NotHashable(err))?;
+                let key = index_obj.try_into().map_err(Error::NotHashable)?;
                 match map.get(&key) {
                     Some(obj) => Ok(obj.clone()),
                     None => Ok(Object::Null),

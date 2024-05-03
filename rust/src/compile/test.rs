@@ -181,7 +181,7 @@ fn test_boolean_expression() {
     ];
 
     for case in tests {
-        let program = parse(&case.input).unwrap();
+        let program = parse(case.input).unwrap();
         let bytecode = compile(&program);
 
         assert_eq!(bytecode, case.expected);
