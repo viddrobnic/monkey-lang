@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{
     code::{Bytecode, Instruction},
     compile::{Compiler, Result},
@@ -286,6 +288,45 @@ fn test_global_let_statements() -> Result<()> {
                     Instruction::Constant(1),
                     Instruction::SetGlobal(1),
                     Instruction::GetGlobal(1),
+                    Instruction::Pop,
+                ],
+            },
+        },
+    ];
+
+    for case in tests {
+        let program = parse(case.input).unwrap();
+
+        let mut compiler = Compiler::new();
+        compiler.compile(&program)?;
+
+        assert_eq!(*compiler.bytecode(), case.expected);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_string_expressions() -> Result<()> {
+    let tests = [
+        TestCase {
+            input: "\"monkey\"",
+            expected: Bytecode {
+                constants: vec![Object::String(Rc::new("monkey".to_string()))],
+                instructions: vec![Instruction::Constant(0), Instruction::Pop],
+            },
+        },
+        TestCase {
+            input: "\"mon\" + \"key\"",
+            expected: Bytecode {
+                constants: vec![
+                    Object::String(Rc::new("mon".to_string())),
+                    Object::String(Rc::new("key".to_string())),
+                ],
+                instructions: vec![
+                    Instruction::Constant(0),
+                    Instruction::Constant(1),
+                    Instruction::Add,
                     Instruction::Pop,
                 ],
             },

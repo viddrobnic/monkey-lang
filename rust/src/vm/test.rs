@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{compile::Compiler, object::Object, parse::parse};
 
 use super::{Result, VirtualMachine};
@@ -115,6 +117,27 @@ fn test_global_let_statements() -> Result<()> {
         (
             "let one = 1; let two = one + one; one + two",
             Object::Integer(3),
+        ),
+    ];
+
+    for (input, expected) in tests {
+        run_test_case(input, expected)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_string_expressions() -> Result<()> {
+    let tests = [
+        (r#""monkey""#, Object::String(Rc::new("monkey".to_string()))),
+        (
+            r#""mon" + "key""#,
+            Object::String(Rc::new("monkey".to_string())),
+        ),
+        (
+            r#""mon" + "key" + "banana""#,
+            Object::String(Rc::new("monkeybanana".to_string())),
         ),
     ];
 

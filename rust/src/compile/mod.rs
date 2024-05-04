@@ -9,6 +9,8 @@ pub mod error;
 
 mod symbol_table;
 
+use std::rc::Rc;
+
 use crate::ast;
 use crate::code::{Bytecode, Instruction};
 use crate::object::Object;
@@ -112,7 +114,10 @@ impl Compiler {
                     self.emit(Instruction::False);
                 }
             }
-            ast::Expression::StringLiteral(_) => todo!(),
+            ast::Expression::StringLiteral(string) => {
+                let const_idx = self.add_constant(Object::String(Rc::new(string.clone())));
+                self.emit(Instruction::Constant(const_idx as u16));
+            }
             ast::Expression::ArrayLiteral(_) => todo!(),
             ast::Expression::HashLiteral(_) => todo!(),
             ast::Expression::PrefixOperator { operator, right } => {

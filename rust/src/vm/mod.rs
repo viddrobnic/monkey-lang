@@ -5,6 +5,8 @@ mod test;
 
 pub mod error;
 
+use std::rc::Rc;
+
 use crate::code::{Bytecode, Instruction};
 use crate::object::Object;
 pub use error::*;
@@ -121,6 +123,10 @@ impl VirtualMachine {
             return self.execute_binary_integer_operation(instruction, *left, *right);
         };
 
+        if let (Object::String(left), Object::String(right)) = (&left, &right) {
+            return self.execute_binary_string_operation(instruction, left, right);
+        }
+
         Err(Error::UnknownBinaryOperator(
             instruction,
             left.data_type().to_string(),
@@ -143,6 +149,24 @@ impl VirtualMachine {
         };
 
         self.push(Object::Integer(res))
+    }
+
+    fn execute_binary_string_operation(
+        &mut self,
+        operation: Instruction,
+        left: &str,
+        right: &str,
+    ) -> Result<()> {
+        if operation != Instruction::Add {
+            return Err(Error::UnknownBinaryOperator(
+                Instruction::Add,
+                "STRING".to_string(),
+                "STRING".to_string(),
+            ));
+        }
+
+        let res = String::from(left) + right;
+        self.push(Object::String(Rc::new(res)))
     }
 
     fn execute_comparison(&mut self, instruction: Instruction) -> Result<()> {
