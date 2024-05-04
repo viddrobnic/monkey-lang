@@ -5,18 +5,27 @@ use crate::object;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Instruction {
     Constant(u16),
+
     Add,
     Sub,
     Mul,
     Div,
+
     Pop,
+
+    Null,
     True,
     False,
+
     Equal,
     NotEqual,
     GreaterThan,
+
     Minus,
     Bang,
+
+    JumpNotTruthy(u16),
+    Jump(u16),
 }
 
 #[derive(Debug, PartialEq)]

@@ -187,3 +187,52 @@ fn test_boolean_expression() {
         assert_eq!(bytecode, case.expected);
     }
 }
+
+#[test]
+fn test_conditionals() {
+    let tests = [
+        TestCase {
+            input: "if (true) { 10 }; 3333;",
+            expected: Bytecode {
+                constants: vec![Object::Integer(10), Object::Integer(3333)],
+                instructions: vec![
+                    Instruction::True,
+                    Instruction::JumpNotTruthy(4),
+                    Instruction::Constant(0),
+                    Instruction::Jump(5),
+                    Instruction::Null,
+                    Instruction::Pop,
+                    Instruction::Constant(1),
+                    Instruction::Pop,
+                ],
+            },
+        },
+        TestCase {
+            input: "if (true) { 10 } else { 20 }; 3333;",
+            expected: Bytecode {
+                constants: vec![
+                    Object::Integer(10),
+                    Object::Integer(20),
+                    Object::Integer(3333),
+                ],
+                instructions: vec![
+                    Instruction::True,
+                    Instruction::JumpNotTruthy(4),
+                    Instruction::Constant(0),
+                    Instruction::Jump(5),
+                    Instruction::Constant(1),
+                    Instruction::Pop,
+                    Instruction::Constant(2),
+                    Instruction::Pop,
+                ],
+            },
+        },
+    ];
+
+    for case in tests {
+        let program = parse(case.input).unwrap();
+        let bytecode = compile(&program);
+
+        assert_eq!(bytecode, case.expected);
+    }
+}

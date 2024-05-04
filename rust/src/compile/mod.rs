@@ -99,10 +99,50 @@ impl Compiler {
                     ast::InfixOperatorKind::LessThan => unreachable!(),
                 };
             }
-            ast::Expression::If { .. } => todo!(),
+            ast::Expression::If {
+                condition,
+                consequence,
+                alternative,
+            } => {
+                self.compile_expression(condition);
+
+                // Dummy value, which we will change later
+                let jump_not_truthy_pos = self.emit(Instruction::JumpNotTruthy(0));
+
+                self.compile_block_statement(consequence);
+                if self.bytecode.instructions.last() == Some(&Instruction::Pop) {
+                    self.bytecode.instructions.pop();
+                }
+
+                // Dummy value, which we will change later
+                let jump_pos = self.emit(Instruction::Jump(0));
+
+                let after_consequence_pos = self.bytecode.instructions.len() as u16;
+                self.bytecode.instructions[jump_not_truthy_pos] =
+                    Instruction::JumpNotTruthy(after_consequence_pos);
+
+                self.compile_block_statement(alternative);
+                if self.bytecode.instructions.last() == Some(&Instruction::Pop) {
+                    self.bytecode.instructions.pop();
+                }
+
+                let after_alternative_pos = self.bytecode.instructions.len() as u16;
+                self.bytecode.instructions[jump_pos] = Instruction::Jump(after_alternative_pos);
+            }
             ast::Expression::FunctionLiteral { .. } => todo!(),
             ast::Expression::FunctionCall { .. } => todo!(),
             ast::Expression::Index { .. } => todo!(),
+        }
+    }
+
+    fn compile_block_statement(&mut self, statement: &ast::BlockStatement) {
+        if statement.statements.len() == 0 {
+            self.emit(Instruction::Null);
+            return;
+        }
+
+        for stmt in statement.statements.iter() {
+            self.compile_statement(stmt);
         }
     }
 }

@@ -64,6 +64,38 @@ fn test_boolean_expression() -> Result<()> {
         ("!!true", Object::Boolean(true)),
         ("!!false", Object::Boolean(false)),
         ("!!5", Object::Boolean(true)),
+        ("!(if (false) { 5; })", Object::Boolean(true)),
+    ];
+
+    for (input, expected) in tests {
+        let program = parse(input).unwrap();
+        let bytecode = compile(&program);
+
+        let mut vm = VirtualMachine::new(&bytecode);
+        vm.run()?;
+
+        assert_eq!(*vm.last_popped(), expected);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_conditionals() -> Result<()> {
+    let tests = [
+        ("if (true) { 10 }", Object::Integer(10)),
+        ("if (true) { 10 } else { 20 }", Object::Integer(10)),
+        ("if (false) { 10 } else { 20 } ", Object::Integer(20)),
+        ("if (1) { 10 }", Object::Integer(10)),
+        ("if (1 < 2) { 10 }", Object::Integer(10)),
+        ("if (1 < 2) { 10 } else { 20 }", Object::Integer(10)),
+        ("if (1 > 2) { 10 } else { 20 }", Object::Integer(20)),
+        ("if (1 > 2) { 10 }", Object::Null),
+        ("if (false) { 10 }", Object::Null),
+        (
+            "if ((if (false) { 10 })) { 10 } else { 20 }",
+            Object::Integer(20),
+        ),
     ];
 
     for (input, expected) in tests {

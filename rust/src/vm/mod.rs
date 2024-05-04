@@ -57,7 +57,9 @@ impl VirtualMachine<'_> {
     }
 
     pub fn run(&mut self) -> Result<()> {
-        for inst in &self.bytecode.instructions {
+        let mut ip = 0;
+        while ip < self.bytecode.instructions.len() {
+            let inst = &self.bytecode.instructions[ip];
             match inst {
                 Instruction::Constant(idx) => {
                     self.push(self.bytecode.constants[*idx as usize].clone())?
@@ -70,12 +72,22 @@ impl VirtualMachine<'_> {
                 }
                 Instruction::True => self.push(Object::Boolean(true))?,
                 Instruction::False => self.push(Object::Boolean(false))?,
+                Instruction::Null => self.push(Object::Null)?,
                 Instruction::Pop => {
                     self.pop();
                 }
                 Instruction::Bang => self.execute_bang_operator()?,
                 Instruction::Minus => self.execute_minus_operator()?,
+                Instruction::JumpNotTruthy(pos) => {
+                    let condition = self.pop();
+                    if !condition.is_truthy() {
+                        ip = *pos as usize - 1;
+                    }
+                }
+                Instruction::Jump(pos) => ip = *pos as usize - 1,
             }
+
+            ip += 1
         }
 
         Ok(())
@@ -150,12 +162,7 @@ impl VirtualMachine<'_> {
 
     fn execute_bang_operator(&mut self) -> Result<()> {
         let operand = self.pop();
-
-        match operand {
-            Object::Boolean(b) => self.push(Object::Boolean(!b)),
-            Object::Null => self.push(Object::Boolean(true)),
-            _ => self.push(Object::Boolean(false)),
-        }
+        self.push(Object::Boolean(!operand.is_truthy()))
     }
 
     fn execute_minus_operator(&mut self) -> Result<()> {
