@@ -1,13 +1,15 @@
-use crate::{compile::compile, object::Object, parse::parse};
+use crate::{compile::Compiler, object::Object, parse::parse};
 
 use super::{Result, VirtualMachine};
 
 fn run_test_case(input: &str, expected: Object) -> Result<()> {
     let program = parse(input).unwrap();
-    let bytecode = compile(&program);
 
-    let mut vm = VirtualMachine::new(&bytecode);
-    vm.run()?;
+    let mut compiler = Compiler::new();
+    compiler.compile(&program).unwrap();
+
+    let mut vm = VirtualMachine::new();
+    vm.run(compiler.bytecode())?;
 
     assert_eq!(*vm.last_popped(), expected);
 

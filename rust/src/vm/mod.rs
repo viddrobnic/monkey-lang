@@ -1,3 +1,5 @@
+//! This package is responsible for executing the compiled bytecode.
+
 #[cfg(test)]
 mod test;
 
@@ -10,9 +12,8 @@ pub use error::*;
 const STACK_SIZE: usize = 2048;
 const GLOBALS_SIZE: usize = u16::MAX as usize;
 
-pub struct VirtualMachine<'a> {
-    bytecode: &'a Bytecode,
-
+/// Virtual machine that can run the bytecode
+pub struct VirtualMachine {
     stack: Vec<Object>,
     // StackPointer which points to the next value.
     // Top of the stack is stack[sp-1]
@@ -21,18 +22,23 @@ pub struct VirtualMachine<'a> {
     globals: Vec<Object>,
 }
 
-impl<'a> VirtualMachine<'a> {
-    pub fn new(bytecode: &'a Bytecode) -> Self {
+impl VirtualMachine {
+    pub fn new() -> Self {
         Self {
-            bytecode,
-            stack: vec![Object::Null; STACK_SIZE],
+            stack: vec![],
             sp: 0,
             globals: vec![Object::Null; GLOBALS_SIZE],
         }
     }
 }
 
-impl VirtualMachine<'_> {
+impl Default for VirtualMachine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl VirtualMachine {
     pub fn stack_top(&self) -> Option<&Object> {
         if self.sp == 0 {
             None
@@ -60,13 +66,21 @@ impl VirtualMachine<'_> {
         self.stack[self.sp].clone()
     }
 
-    pub fn run(&mut self) -> Result<()> {
+    /// Runs the bytecode.
+    ///
+    /// The stack of the VM is cleaned, but the globals are left
+    /// unchanged. If you don't want to keep the globals between runs,
+    /// initialize a new VirtualMachine.
+    pub fn run(&mut self, bytecode: &Bytecode) -> Result<()> {
+        self.stack = vec![Object::Null; STACK_SIZE];
+        self.sp = 0;
+
         let mut ip = 0;
-        while ip < self.bytecode.instructions.len() {
-            let inst = &self.bytecode.instructions[ip];
+        while ip < bytecode.instructions.len() {
+            let inst = &bytecode.instructions[ip];
             match inst {
                 Instruction::Constant(idx) => {
-                    self.push(self.bytecode.constants[*idx as usize].clone())?
+                    self.push(bytecode.constants[*idx as usize].clone())?
                 }
                 Instruction::Add | Instruction::Mul | Instruction::Sub | Instruction::Div => {
                     self.execute_binary_operation(*inst)?;

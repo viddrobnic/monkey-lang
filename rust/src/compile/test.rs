@@ -1,6 +1,6 @@
 use crate::{
     code::{Bytecode, Instruction},
-    compile::compile,
+    compile::{Compiler, Result},
     object::Object,
     parse::parse,
 };
@@ -11,7 +11,7 @@ struct TestCase {
 }
 
 #[test]
-fn test_integer_arithemtic() {
+fn test_integer_arithemtic() -> Result<()> {
     let tests = [
         TestCase {
             input: "1 + 2",
@@ -76,14 +76,18 @@ fn test_integer_arithemtic() {
 
     for case in tests {
         let program = parse(case.input).unwrap();
-        let bytecode = compile(&program);
 
-        assert_eq!(bytecode, case.expected);
+        let mut compiler = Compiler::new();
+        compiler.compile(&program)?;
+
+        assert_eq!(*compiler.bytecode(), case.expected);
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_boolean_expression() {
+fn test_boolean_expression() -> Result<()> {
     let tests = [
         TestCase {
             input: "true",
@@ -182,14 +186,18 @@ fn test_boolean_expression() {
 
     for case in tests {
         let program = parse(case.input).unwrap();
-        let bytecode = compile(&program);
 
-        assert_eq!(bytecode, case.expected);
+        let mut compiler = Compiler::new();
+        compiler.compile(&program)?;
+
+        assert_eq!(*compiler.bytecode(), case.expected);
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_conditionals() {
+fn test_conditionals() -> Result<()> {
     let tests = [
         TestCase {
             input: "if (true) { 10 }; 3333;",
@@ -231,14 +239,18 @@ fn test_conditionals() {
 
     for case in tests {
         let program = parse(case.input).unwrap();
-        let bytecode = compile(&program);
 
-        assert_eq!(bytecode, case.expected);
+        let mut compiler = Compiler::new();
+        compiler.compile(&program)?;
+
+        assert_eq!(*compiler.bytecode(), case.expected);
     }
+
+    Ok(())
 }
 
 #[test]
-fn test_global_let_statements() {
+fn test_global_let_statements() -> Result<()> {
     let tests = [
         TestCase {
             input: "let one = 1; let two = 2;",
@@ -282,8 +294,12 @@ fn test_global_let_statements() {
 
     for case in tests {
         let program = parse(case.input).unwrap();
-        let bytecode = compile(&program);
 
-        assert_eq!(bytecode, case.expected);
+        let mut compiler = Compiler::new();
+        compiler.compile(&program)?;
+
+        assert_eq!(*compiler.bytecode(), case.expected);
     }
+
+    Ok(())
 }

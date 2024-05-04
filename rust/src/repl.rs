@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    ast, compile::compile, evaluate::Evaluator, object::Object, parse::parse, vm::VirtualMachine,
+    ast, compile::Compiler, evaluate::Evaluator, object::Object, parse::parse, vm::VirtualMachine,
 };
 
 const PROMPT: &str = ">> ";
@@ -64,15 +64,20 @@ pub fn start_eval(input: impl io::Read, mut output: impl io::Write) {
 pub fn start_vm(input: impl io::Read, mut output: impl io::Write) {
     let mut reader = io::BufReader::new(input);
 
+    let mut compiler = Compiler::new();
+    let mut vm = VirtualMachine::new();
+
     loop {
         let Some(program) = parse_line(&mut reader, &mut output) else {
             continue;
         };
 
-        let bytecode = compile(&program);
+        if let Err(err) = compiler.compile(&program) {
+            writeln!(output, "Woops! Compiling the program failed: {}", err).unwrap();
+            continue;
+        }
 
-        let mut vm = VirtualMachine::new(&bytecode);
-        if let Err(err) = vm.run() {
+        if let Err(err) = vm.run(compiler.bytecode()) {
             writeln!(output, "Woops! Executing bytecode failed: {}", err).unwrap();
             continue;
         }
