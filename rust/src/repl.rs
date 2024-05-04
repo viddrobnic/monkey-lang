@@ -1,9 +1,11 @@
 use std::{
     fmt::Display,
-    io::{self, BufRead},
+    io::{self, BufRead, BufReader},
 };
 
-use crate::{evaluate::Evaluator, object::Object, parse};
+use crate::{
+    ast, compile::compile, evaluate::Evaluator, object::Object, parse::parse, vm::VirtualMachine,
+};
 
 const PROMPT: &str = ">> ";
 
@@ -21,29 +23,61 @@ const MONKEY_FACE: &str = r#"
            '-----'
 "#;
 
-pub fn start(input: impl io::Read, mut output: impl io::Write) {
+fn parse_line<R: io::Read, W: io::Write>(
+    reader: &mut BufReader<R>,
+    output: &mut W,
+) -> Option<ast::Program> {
+    write!(output, "{}", PROMPT).unwrap();
+    output.flush().unwrap();
+
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+
+    match parse(&line) {
+        Ok(p) => Some(p),
+        Err(err) => {
+            write_err(output, err);
+            None
+        }
+    }
+}
+
+pub fn start_eval(input: impl io::Read, mut output: impl io::Write) {
     let mut reader = io::BufReader::new(input);
     let mut evaluator = Evaluator::new();
 
     loop {
-        write!(output, "{}", PROMPT).unwrap();
-        output.flush().unwrap();
+        let Some(program) = parse_line(&mut reader, &mut output) else {
+            continue;
+        };
 
-        let mut line = String::new();
-        if reader.read_line(&mut line).is_err() {
-            return;
+        match evaluator.evaluate(&program) {
+            Ok(result) if result != Object::Null => {
+                writeln!(output, "{}", result.inspect()).unwrap()
+            }
+            Err(err) => writeln!(output, "{}", err).unwrap(),
+            _ => (),
+        }
+    }
+}
+
+pub fn start_vm(input: impl io::Read, mut output: impl io::Write) {
+    let mut reader = io::BufReader::new(input);
+
+    loop {
+        let Some(program) = parse_line(&mut reader, &mut output) else {
+            continue;
+        };
+
+        let bytecode = compile(&program);
+
+        let mut vm = VirtualMachine::new(&bytecode);
+        if let Err(err) = vm.run() {
+            writeln!(output, "Woops! Executing bytecode failed: {}", err).unwrap();
+            continue;
         }
 
-        match parse::parse(&line) {
-            Ok(program) => match evaluator.evaluate(&program) {
-                Ok(result) if result != Object::Null => {
-                    writeln!(output, "{}", result.inspect()).unwrap()
-                }
-                Err(err) => writeln!(output, "{}", err).unwrap(),
-                _ => (),
-            },
-            Err(err) => write_err(&mut output, err),
-        }
+        writeln!(output, "{}", vm.last_popped().inspect()).unwrap();
     }
 }
 

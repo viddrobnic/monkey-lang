@@ -5,12 +5,21 @@ use std::{
     process,
 };
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use monkey::{evaluate::Evaluator, parse, repl};
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum Runtime {
+    Eval,
+    Vm,
+}
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
+    #[arg(value_enum, default_value_t = Runtime::Vm)]
+    runtime: Runtime,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -24,18 +33,23 @@ enum Commands {
 fn main() {
     let cli = Cli::parse();
     match cli.command {
-        None => interactive(),
-        Some(Commands::Run { path }) => run_file(path),
+        None => interactive(cli.runtime),
+        Some(Commands::Run { path }) => run_file(path, cli.runtime),
     }
 }
 
-fn interactive() {
+fn interactive(runtime: Runtime) {
     println!("Hello! This is the Monkey programming language!");
     println!("Feel free to type in commands");
-    repl::start(stdin(), stdout());
+    match runtime {
+        Runtime::Eval => repl::start_eval(stdin(), stdout()),
+        Runtime::Vm => repl::start_vm(stdin(), stdout()),
+    }
 }
 
-fn run_file(path: PathBuf) {
+fn run_file(path: PathBuf, _runtime: Runtime) {
+    // TODO: Use vm if specified
+
     let input = fs::read_to_string(path).unwrap_or_else(|err| {
         println!("{}", err);
         process::exit(1);
