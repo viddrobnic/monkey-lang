@@ -26,6 +26,9 @@ pub enum Instruction {
 
     JumpNotTruthy(u16),
     Jump(u16),
+
+    GetGlobal(u16),
+    SetGlobal(u16),
 }
 
 #[derive(Debug, PartialEq)]

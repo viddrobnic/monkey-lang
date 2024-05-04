@@ -8,6 +8,7 @@ use crate::object::Object;
 pub use error::*;
 
 const STACK_SIZE: usize = 2048;
+const GLOBALS_SIZE: usize = u16::MAX as usize;
 
 pub struct VirtualMachine<'a> {
     bytecode: &'a Bytecode,
@@ -16,6 +17,8 @@ pub struct VirtualMachine<'a> {
     // StackPointer which points to the next value.
     // Top of the stack is stack[sp-1]
     sp: usize,
+
+    globals: Vec<Object>,
 }
 
 impl<'a> VirtualMachine<'a> {
@@ -24,6 +27,7 @@ impl<'a> VirtualMachine<'a> {
             bytecode,
             stack: vec![Object::Null; STACK_SIZE],
             sp: 0,
+            globals: vec![Object::Null; GLOBALS_SIZE],
         }
     }
 }
@@ -85,6 +89,8 @@ impl VirtualMachine<'_> {
                     }
                 }
                 Instruction::Jump(pos) => ip = *pos as usize - 1,
+                Instruction::GetGlobal(idx) => self.push(self.globals[*idx as usize].clone())?,
+                Instruction::SetGlobal(idx) => self.globals[*idx as usize] = self.pop(),
             }
 
             ip += 1

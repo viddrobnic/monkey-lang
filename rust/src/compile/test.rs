@@ -236,3 +236,54 @@ fn test_conditionals() {
         assert_eq!(bytecode, case.expected);
     }
 }
+
+#[test]
+fn test_global_let_statements() {
+    let tests = [
+        TestCase {
+            input: "let one = 1; let two = 2;",
+            expected: Bytecode {
+                constants: vec![Object::Integer(1), Object::Integer(2)],
+                instructions: vec![
+                    Instruction::Constant(0),
+                    Instruction::SetGlobal(0),
+                    Instruction::Constant(1),
+                    Instruction::SetGlobal(1),
+                ],
+            },
+        },
+        TestCase {
+            input: "let one = 1; one",
+            expected: Bytecode {
+                constants: vec![Object::Integer(1)],
+                instructions: vec![
+                    Instruction::Constant(0),
+                    Instruction::SetGlobal(0),
+                    Instruction::GetGlobal(0),
+                    Instruction::Pop,
+                ],
+            },
+        },
+        TestCase {
+            input: "let one = 1; let two = 2; two;",
+            expected: Bytecode {
+                constants: vec![Object::Integer(1), Object::Integer(2)],
+                instructions: vec![
+                    Instruction::Constant(0),
+                    Instruction::SetGlobal(0),
+                    Instruction::Constant(1),
+                    Instruction::SetGlobal(1),
+                    Instruction::GetGlobal(1),
+                    Instruction::Pop,
+                ],
+            },
+        },
+    ];
+
+    for case in tests {
+        let program = parse(case.input).unwrap();
+        let bytecode = compile(&program);
+
+        assert_eq!(bytecode, case.expected);
+    }
+}

@@ -1,9 +1,13 @@
 #[cfg(test)]
 mod test;
 
+mod symbol_table;
+
 use crate::ast;
 use crate::code::{Bytecode, Instruction};
 use crate::object::Object;
+
+use self::symbol_table::SymbolTable;
 
 pub fn compile(program: &ast::Program) -> Bytecode {
     let mut compiler = Compiler::new();
@@ -13,12 +17,14 @@ pub fn compile(program: &ast::Program) -> Bytecode {
 
 struct Compiler {
     bytecode: Bytecode,
+    symbol_table: SymbolTable,
 }
 
 impl Compiler {
     fn new() -> Self {
         Self {
             bytecode: Bytecode::new(),
+            symbol_table: SymbolTable::new(),
         }
     }
 
@@ -40,7 +46,12 @@ impl Compiler {
 
     fn compile_statement(&mut self, statement: &ast::Statement) {
         match statement {
-            ast::Statement::Let { .. } => todo!(),
+            ast::Statement::Let { name, value } => {
+                self.compile_expression(value);
+
+                let symbol = self.symbol_table.define(name.clone());
+                self.emit(Instruction::SetGlobal(symbol.index));
+            }
             ast::Statement::Return(_) => todo!(),
             ast::Statement::Expression(expr) => {
                 self.compile_expression(expr);
@@ -51,7 +62,16 @@ impl Compiler {
 
     fn compile_expression(&mut self, expression: &ast::Expression) {
         match expression {
-            ast::Expression::Identifier(_) => todo!(),
+            ast::Expression::Identifier(ident) => {
+                let symbol = self.symbol_table.resolve(ident);
+                match symbol {
+                    Some(symbol) => {
+                        self.emit(Instruction::GetGlobal(symbol.index));
+                    }
+                    // TODO: User errors instead of panic
+                    None => panic!("undefined variable: {}", ident),
+                }
+            }
             ast::Expression::IntegerLiteral(val) => {
                 let const_idx = self.add_constant(Object::Integer(*val));
                 self.emit(Instruction::Constant(const_idx as u16));

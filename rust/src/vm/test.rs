@@ -2,6 +2,18 @@ use crate::{compile::compile, object::Object, parse::parse};
 
 use super::{Result, VirtualMachine};
 
+fn run_test_case(input: &str, expected: Object) -> Result<()> {
+    let program = parse(input).unwrap();
+    let bytecode = compile(&program);
+
+    let mut vm = VirtualMachine::new(&bytecode);
+    vm.run()?;
+
+    assert_eq!(*vm.last_popped(), expected);
+
+    Ok(())
+}
+
 #[test]
 fn test_integer_arithmetic() -> Result<()> {
     let tests = [
@@ -24,13 +36,7 @@ fn test_integer_arithmetic() -> Result<()> {
     ];
 
     for (input, expected) in tests {
-        let program = parse(input).unwrap();
-        let bytecode = compile(&program);
-
-        let mut vm = VirtualMachine::new(&bytecode);
-        vm.run()?;
-
-        assert_eq!(*vm.last_popped(), expected);
+        run_test_case(input, expected)?;
     }
 
     Ok(())
@@ -68,13 +74,7 @@ fn test_boolean_expression() -> Result<()> {
     ];
 
     for (input, expected) in tests {
-        let program = parse(input).unwrap();
-        let bytecode = compile(&program);
-
-        let mut vm = VirtualMachine::new(&bytecode);
-        vm.run()?;
-
-        assert_eq!(*vm.last_popped(), expected);
+        run_test_case(input, expected)?;
     }
 
     Ok(())
@@ -99,13 +99,25 @@ fn test_conditionals() -> Result<()> {
     ];
 
     for (input, expected) in tests {
-        let program = parse(input).unwrap();
-        let bytecode = compile(&program);
+        run_test_case(input, expected)?;
+    }
 
-        let mut vm = VirtualMachine::new(&bytecode);
-        vm.run()?;
+    Ok(())
+}
 
-        assert_eq!(*vm.last_popped(), expected);
+#[test]
+fn test_global_let_statements() -> Result<()> {
+    let tests = [
+        ("let one = 1; one", Object::Integer(1)),
+        ("let one = 1; let two = 2; one + two", Object::Integer(3)),
+        (
+            "let one = 1; let two = one + one; one + two",
+            Object::Integer(3),
+        ),
+    ];
+
+    for (input, expected) in tests {
+        run_test_case(input, expected)?;
     }
 
     Ok(())
