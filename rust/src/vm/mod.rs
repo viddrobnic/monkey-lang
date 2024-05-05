@@ -107,6 +107,15 @@ impl VirtualMachine {
                 Instruction::Jump(pos) => ip = *pos as usize - 1,
                 Instruction::GetGlobal(idx) => self.push(self.globals[*idx as usize].clone())?,
                 Instruction::SetGlobal(idx) => self.globals[*idx as usize] = self.pop(),
+                Instruction::Array(len) => {
+                    let length = *len as usize;
+                    let start = self.sp - length;
+
+                    let arr = self.stack[start..self.sp].to_vec();
+
+                    self.sp -= length;
+                    self.push(Object::Array(Rc::new(arr)))?;
+                }
             }
 
             ip += 1

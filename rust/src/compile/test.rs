@@ -344,3 +344,66 @@ fn test_string_expressions() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_array_literals() -> Result<()> {
+    let tests = [
+        TestCase {
+            input: "[]",
+            expected: Bytecode {
+                constants: vec![],
+                instructions: vec![Instruction::Array(0), Instruction::Pop],
+            },
+        },
+        TestCase {
+            input: "[1, 2, 3]",
+            expected: Bytecode {
+                constants: vec![Object::Integer(1), Object::Integer(2), Object::Integer(3)],
+                instructions: vec![
+                    Instruction::Constant(0),
+                    Instruction::Constant(1),
+                    Instruction::Constant(2),
+                    Instruction::Array(3),
+                    Instruction::Pop,
+                ],
+            },
+        },
+        TestCase {
+            input: "[1 + 2, 3 - 4, 5 * 6]",
+            expected: Bytecode {
+                constants: vec![
+                    Object::Integer(1),
+                    Object::Integer(2),
+                    Object::Integer(3),
+                    Object::Integer(4),
+                    Object::Integer(5),
+                    Object::Integer(6),
+                ],
+                instructions: vec![
+                    Instruction::Constant(0),
+                    Instruction::Constant(1),
+                    Instruction::Add,
+                    Instruction::Constant(2),
+                    Instruction::Constant(3),
+                    Instruction::Sub,
+                    Instruction::Constant(4),
+                    Instruction::Constant(5),
+                    Instruction::Mul,
+                    Instruction::Array(3),
+                    Instruction::Pop,
+                ],
+            },
+        },
+    ];
+
+    for case in tests {
+        let program = parse(case.input).unwrap();
+
+        let mut compiler = Compiler::new();
+        compiler.compile(&program)?;
+
+        assert_eq!(*compiler.bytecode(), case.expected);
+    }
+
+    Ok(())
+}

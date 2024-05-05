@@ -118,7 +118,13 @@ impl Compiler {
                 let const_idx = self.add_constant(Object::String(Rc::new(string.clone())));
                 self.emit(Instruction::Constant(const_idx as u16));
             }
-            ast::Expression::ArrayLiteral(_) => todo!(),
+            ast::Expression::ArrayLiteral(arr) => {
+                for expr in arr {
+                    self.compile_expression(expr)?;
+                }
+
+                self.emit(Instruction::Array(arr.len() as u16));
+            }
             ast::Expression::HashLiteral(_) => todo!(),
             ast::Expression::PrefixOperator { operator, right } => {
                 self.compile_expression(right)?;

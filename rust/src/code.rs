@@ -29,6 +29,8 @@ pub enum Instruction {
 
     GetGlobal(u16),
     SetGlobal(u16),
+
+    Array(u16),
 }
 
 #[derive(Debug, PartialEq)]

@@ -147,3 +147,32 @@ fn test_string_expressions() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_array_literals() -> Result<()> {
+    let tests = [
+        ("[]", Object::Array(Rc::new(vec![]))),
+        (
+            "[1, 2, 3]",
+            Object::Array(Rc::new(vec![
+                Object::Integer(1),
+                Object::Integer(2),
+                Object::Integer(3),
+            ])),
+        ),
+        (
+            "[1 + 2, 3 * 4, 5 + 6]",
+            Object::Array(Rc::new(vec![
+                Object::Integer(3),
+                Object::Integer(12),
+                Object::Integer(11),
+            ])),
+        ),
+    ];
+
+    for (input, expected) in tests {
+        run_test_case(input, expected)?;
+    }
+
+    Ok(())
+}
