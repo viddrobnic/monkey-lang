@@ -5,6 +5,8 @@ use crate::{
     parse,
 };
 
+use super::DataType;
+
 #[test]
 fn test_eval_integer() -> Result<()> {
     let tests = [
@@ -226,7 +228,7 @@ fn test_error_handling() {
         ),
         (
             r#"{"name": "Monkey"}[fn(x) { x }];"#,
-            Error::NotHashable("FUNCTION".to_string()),
+            Error::NotHashable(DataType::Function),
         ),
     ];
 

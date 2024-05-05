@@ -183,7 +183,10 @@ impl Evaluator {
             },
             ast::PrefixOperatorKind::Negative => match right {
                 Object::Integer(val) => Ok(Object::Integer(-val)),
-                _ => Err(Error::UnknownOperator(format!("-{}", right.data_type()))),
+                _ => Err(Error::UnknownOperator(format!(
+                    "-{}",
+                    DataType::from(right)
+                ))),
             },
         }
     }
@@ -227,9 +230,9 @@ impl Evaluator {
                 _ => {
                     return Err(Error::UnknownOperator(format!(
                         "{} {} {}",
-                        left.data_type(),
+                        DataType::from(left),
                         operator.debug_str(),
-                        right.data_type()
+                        DataType::from(right),
                     )))
                 }
             };
@@ -247,9 +250,9 @@ impl Evaluator {
                 _ => {
                     return Err(Error::UnknownOperator(format!(
                         "{} {} {}",
-                        left.data_type(),
+                        DataType::from(left),
                         operator.debug_str(),
-                        right.data_type(),
+                        DataType::from(right),
                     )));
                 }
             };
@@ -257,20 +260,20 @@ impl Evaluator {
             return Ok(res);
         }
 
-        if left.data_type() != right.data_type() {
+        if DataType::from(&left) != DataType::from(&right) {
             return Err(Error::TypeMismatch(format!(
                 "{} {} {}",
-                left.data_type(),
+                DataType::from(left),
                 operator.debug_str(),
-                right.data_type()
+                DataType::from(right),
             )));
         }
 
         Err(Error::UnknownOperator(format!(
             "{} {} {}",
-            left.data_type(),
+            DataType::from(&left),
             operator.debug_str(),
-            right.data_type()
+            DataType::from(&right),
         )))
     }
 
@@ -351,7 +354,7 @@ impl Evaluator {
                 }
             }
             Object::Builtin(fun) => builtin::execute(&fun, args),
-            _ => Err(Error::NotAFunction(function.data_type().to_string())),
+            _ => Err(Error::NotAFunction(function.into())),
         }
     }
 
@@ -392,8 +395,8 @@ impl Evaluator {
             Object::Array(arr) => {
                 let Object::Integer(idx) = index_obj else {
                     return Err(Error::IndexOperatorNotSupported(
-                        left_obj.data_type().to_string(),
-                        index_obj.data_type().to_string(),
+                        left_obj.into(),
+                        index_obj.into(),
                     ));
                 };
 
@@ -414,12 +417,10 @@ impl Evaluator {
                     None => Ok(Object::Null),
                 }
             }
-            _ => {
-                return Err(Error::IndexOperatorNotSupported(
-                    left_obj.data_type().to_string(),
-                    index_obj.data_type().to_string(),
-                ))
-            }
+            _ => Err(Error::IndexOperatorNotSupported(
+                left_obj.into(),
+                index_obj.into(),
+            )),
         }
     }
 }

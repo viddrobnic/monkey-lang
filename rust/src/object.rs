@@ -1,6 +1,6 @@
 use crate::{ast, environment::Environment};
 
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, fmt::Display, rc::Rc};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Object {
@@ -13,6 +13,59 @@ pub enum Object {
     Array(Rc<Vec<Object>>),
     HashMap(Rc<HashMap<HashKey, Object>>),
     Null,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum DataType {
+    Integer,
+    String,
+    Boolean,
+    Return,
+    Function,
+    Builtin,
+    Array,
+    HashMap,
+    Null,
+}
+
+impl From<&Object> for DataType {
+    fn from(value: &Object) -> Self {
+        match value {
+            Object::Integer(_) => Self::Integer,
+            Object::String(_) => Self::String,
+            Object::Boolean(_) => Self::Boolean,
+            Object::Return(_) => Self::Return,
+            Object::Function(_) => Self::Function,
+            Object::Builtin(_) => Self::Builtin,
+            Object::Array(_) => Self::Array,
+            Object::HashMap(_) => Self::HashMap,
+            Object::Null => Self::Null,
+        }
+    }
+}
+
+impl From<Object> for DataType {
+    fn from(value: Object) -> Self {
+        (&value).into()
+    }
+}
+
+impl Display for DataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let string = match self {
+            DataType::Integer => "INTEGER",
+            DataType::String => "STRING",
+            DataType::Boolean => "BOOLEAN",
+            DataType::Return => "RETURN",
+            DataType::Function => "FUNCTION",
+            DataType::Builtin => "BUILTIN",
+            DataType::Array => "ARRAY",
+            DataType::HashMap => "HASH_MAP",
+            DataType::Null => "NULL",
+        };
+
+        f.write_str(string)
+    }
 }
 
 impl Object {
@@ -47,20 +100,6 @@ impl Object {
 
     pub fn is_truthy(&self) -> bool {
         !matches!(self, Object::Boolean(false) | Object::Null)
-    }
-
-    pub fn data_type(&self) -> &str {
-        match self {
-            Object::Integer(_) => "INTEGER",
-            Object::String(_) => "STRING",
-            Object::Boolean(_) => "BOOLEAN",
-            Object::Return(_) => "RETURN",
-            Object::Function(_) => "FUNCTION",
-            Object::Builtin(_) => "BUILTIN",
-            Object::Array(_) => "ARRAY",
-            Object::HashMap(_) => "HASH_MAP",
-            Object::Null => "NULL",
-        }
     }
 }
 
@@ -99,14 +138,14 @@ impl HashKey {
 }
 
 impl TryFrom<Object> for HashKey {
-    type Error = String;
+    type Error = DataType;
 
     fn try_from(value: Object) -> Result<Self, Self::Error> {
         match value {
             Object::String(str) => Ok(Self::String(str)),
             Object::Integer(i) => Ok(Self::Integer(i)),
             Object::Boolean(b) => Ok(Self::Boolean(b)),
-            _ => Err(value.data_type().to_string()),
+            _ => Err(value.into()),
         }
     }
 }

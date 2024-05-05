@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::code::{Bytecode, Instruction};
-use crate::object::{HashKey, Object};
+use crate::object::{DataType, HashKey, Object};
 pub use error::*;
 
 const STACK_SIZE: usize = 2048;
@@ -148,8 +148,8 @@ impl VirtualMachine {
 
         Err(Error::UnknownBinaryOperator(
             instruction,
-            left.data_type().to_string(),
-            right.data_type().to_string(),
+            left.into(),
+            right.into(),
         ))
     }
 
@@ -179,8 +179,8 @@ impl VirtualMachine {
         if operation != Instruction::Add {
             return Err(Error::UnknownBinaryOperator(
                 Instruction::Add,
-                "STRING".to_string(),
-                "STRING".to_string(),
+                DataType::String,
+                DataType::String,
             ));
         }
 
@@ -201,8 +201,8 @@ impl VirtualMachine {
             Instruction::NotEqual => self.push(Object::Boolean(left != right)),
             _ => Err(Error::UnknownBinaryOperator(
                 instruction,
-                left.data_type().to_string(),
-                right.data_type().to_string(),
+                left.into(),
+                right.into(),
             )),
         }
     }
@@ -232,9 +232,7 @@ impl VirtualMachine {
         let operand = self.pop();
 
         let Object::Integer(value) = operand else {
-            return Err(Error::UnsupportedNegationType(
-                operand.data_type().to_string(),
-            ));
+            return Err(Error::UnsupportedNegationType(operand.into()));
         };
 
         self.push(Object::Integer(-value))
@@ -265,18 +263,15 @@ impl VirtualMachine {
         match left {
             Object::Array(arr) => self.execute_array_index(&arr, index),
             Object::HashMap(hash) => self.execute_hash_index(&hash, index),
-            _ => Err(Error::IndexOperatorNotSupported(
-                left.data_type().to_string(),
-                index.data_type().to_string(),
-            )),
+            _ => Err(Error::IndexOperatorNotSupported(left.into(), index.into())),
         }
     }
 
     fn execute_array_index(&mut self, arr: &[Object], index: Object) -> Result<()> {
         let Object::Integer(idx) = index else {
             return Err(Error::IndexOperatorNotSupported(
-                "ARRAY".to_string(),
-                index.data_type().to_string(),
+                DataType::Array,
+                index.into(),
             ));
         };
 

@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::{Error, Result};
+use super::{DataType, Error, Result};
 use crate::object::{BuiltinFunction, Object};
 
 pub(super) fn execute(fun: &BuiltinFunction, args: Vec<Object>) -> Result<Object> {
@@ -25,7 +25,7 @@ fn execute_len(args: Vec<Object>) -> Result<Object> {
     match &args[0] {
         Object::String(s) => Ok(Object::Integer(s.len() as i64)),
         Object::Array(arr) => Ok(Object::Integer(arr.len() as i64)),
-        _ => Err(Error::TypeMismatch(args[0].data_type().to_string())),
+        _ => Err(Error::TypeMismatch(DataType::from(&args[0]).to_string())),
     }
 }
 
@@ -38,7 +38,7 @@ fn execute_first(args: Vec<Object>) -> Result<Object> {
     }
 
     let Object::Array(arr) = &args[0] else {
-        return Err(Error::TypeMismatch(args[0].data_type().to_string()));
+        return Err(Error::TypeMismatch(DataType::from(&args[0]).to_string()));
     };
 
     if arr.is_empty() {
@@ -57,7 +57,7 @@ fn execute_last(args: Vec<Object>) -> Result<Object> {
     }
 
     let Object::Array(arr) = &args[0] else {
-        return Err(Error::TypeMismatch(args[0].data_type().to_string()));
+        return Err(Error::TypeMismatch(DataType::from(&args[0]).to_string()));
     };
 
     if arr.is_empty() {
@@ -76,7 +76,7 @@ fn execute_rest(args: Vec<Object>) -> Result<Object> {
     }
 
     let Object::Array(arr) = &args[0] else {
-        return Err(Error::TypeMismatch(args[0].data_type().to_string()));
+        return Err(Error::TypeMismatch(DataType::from(&args[0]).to_string()));
     };
 
     if arr.is_empty() {
@@ -95,7 +95,7 @@ fn execute_push(args: Vec<Object>) -> Result<Object> {
     }
 
     let Object::Array(arr) = &args[0] else {
-        return Err(Error::TypeMismatch(args[0].data_type().to_string()));
+        return Err(Error::TypeMismatch(DataType::from(&args[0]).to_string()));
     };
 
     let mut new_arr = (**arr).clone();
