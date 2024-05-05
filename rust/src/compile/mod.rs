@@ -125,7 +125,15 @@ impl Compiler {
 
                 self.emit(Instruction::Array(arr.len() as u16));
             }
-            ast::Expression::HashLiteral(_) => todo!(),
+            ast::Expression::HashLiteral(hash) => {
+                for pair in hash {
+                    self.compile_expression(&pair.key)?;
+                    self.compile_expression(&pair.value)?;
+                }
+
+                let length = (hash.len() * 2) as u16;
+                self.emit(Instruction::Hash(length));
+            }
             ast::Expression::PrefixOperator { operator, right } => {
                 self.compile_expression(right)?;
                 match operator {

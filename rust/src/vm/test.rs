@@ -1,6 +1,10 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
-use crate::{compile::Compiler, object::Object, parse::parse};
+use crate::{
+    compile::Compiler,
+    object::{HashKey, Object},
+    parse::parse,
+};
 
 use super::{Result, VirtualMachine};
 
@@ -167,6 +171,33 @@ fn test_array_literals() -> Result<()> {
                 Object::Integer(12),
                 Object::Integer(11),
             ])),
+        ),
+    ];
+
+    for (input, expected) in tests {
+        run_test_case(input, expected)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_hash_literals() -> Result<()> {
+    let tests = [
+        ("{}", Object::HashMap(Rc::new(HashMap::from([])))),
+        (
+            "{1: 2, 2: 3}",
+            Object::HashMap(Rc::new(HashMap::from([
+                (HashKey::Integer(1), Object::Integer(2)),
+                (HashKey::Integer(2), Object::Integer(3)),
+            ]))),
+        ),
+        (
+            "{1 + 1: 2 * 2, 3 + 3: 4 * 4}",
+            Object::HashMap(Rc::new(HashMap::from([
+                (HashKey::Integer(2), Object::Integer(4)),
+                (HashKey::Integer(6), Object::Integer(16)),
+            ]))),
         ),
     ];
 

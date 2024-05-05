@@ -31,6 +31,7 @@ pub enum Instruction {
     SetGlobal(u16),
 
     Array(u16),
+    Hash(u16),
 }
 
 #[derive(Debug, PartialEq)]

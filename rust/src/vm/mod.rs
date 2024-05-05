@@ -5,10 +5,11 @@ mod test;
 
 pub mod error;
 
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::code::{Bytecode, Instruction};
-use crate::object::Object;
+use crate::object::{HashKey, Object};
 pub use error::*;
 
 const STACK_SIZE: usize = 2048;
@@ -115,6 +116,14 @@ impl VirtualMachine {
 
                     self.sp -= length;
                     self.push(Object::Array(Rc::new(arr)))?;
+                }
+                Instruction::Hash(len) => {
+                    let length = *len as usize;
+
+                    let hash_map = self.build_hash_map(length)?;
+
+                    self.sp -= length;
+                    self.push(hash_map)?;
                 }
             }
 
@@ -228,5 +237,23 @@ impl VirtualMachine {
         };
 
         self.push(Object::Integer(-value))
+    }
+
+    fn build_hash_map(&self, length: usize) -> Result<Object> {
+        let start = self.sp - length;
+
+        let hash_map: Result<HashMap<_, _>> = self.stack[start..self.sp]
+            .chunks(2)
+            .map(|chunk| -> Result<(HashKey, Object)> {
+                let key = &chunk[0];
+                let value = &chunk[1];
+
+                let key: HashKey = key.clone().try_into().map_err(Error::UnhashableKey)?;
+
+                Ok((key, value.clone()))
+            })
+            .collect();
+
+        hash_map.map(|hm| Object::HashMap(Rc::new(hm)))
     }
 }

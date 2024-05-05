@@ -10,6 +10,8 @@ pub enum Error {
     UnknownBinaryOperator(Instruction, String, String),
     #[error("unsupported type for negation: {0}")]
     UnsupportedNegationType(String),
+    #[error("key not hashable: {0}")]
+    UnhashableKey(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
