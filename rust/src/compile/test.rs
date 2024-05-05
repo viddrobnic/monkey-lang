@@ -479,3 +479,64 @@ fn test_hash_literals() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_index_expressions() -> Result<()> {
+    let tests = [
+        TestCase {
+            input: "[1, 2, 3][1 + 1]",
+            expected: Bytecode {
+                constants: vec![
+                    Object::Integer(1),
+                    Object::Integer(2),
+                    Object::Integer(3),
+                    Object::Integer(1),
+                    Object::Integer(1),
+                ],
+                instructions: vec![
+                    Instruction::Constant(0),
+                    Instruction::Constant(1),
+                    Instruction::Constant(2),
+                    Instruction::Array(3),
+                    Instruction::Constant(3),
+                    Instruction::Constant(4),
+                    Instruction::Add,
+                    Instruction::Index,
+                    Instruction::Pop,
+                ],
+            },
+        },
+        TestCase {
+            input: "{1: 2}[2-1]",
+            expected: Bytecode {
+                constants: vec![
+                    Object::Integer(1),
+                    Object::Integer(2),
+                    Object::Integer(2),
+                    Object::Integer(1),
+                ],
+                instructions: vec![
+                    Instruction::Constant(0),
+                    Instruction::Constant(1),
+                    Instruction::Hash(2),
+                    Instruction::Constant(2),
+                    Instruction::Constant(3),
+                    Instruction::Sub,
+                    Instruction::Index,
+                    Instruction::Pop,
+                ],
+            },
+        },
+    ];
+
+    for case in tests {
+        let program = parse(case.input).unwrap();
+
+        let mut compiler = Compiler::new();
+        compiler.compile(&program)?;
+
+        assert_eq!(*compiler.bytecode(), case.expected);
+    }
+
+    Ok(())
+}

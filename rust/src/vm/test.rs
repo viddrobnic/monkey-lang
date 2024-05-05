@@ -207,3 +207,25 @@ fn test_hash_literals() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_index_expressions() -> Result<()> {
+    let tests = [
+        ("[1, 2, 3][1]", Object::Integer(2)),
+        ("[1, 2, 3][0 + 2]", Object::Integer(3)),
+        ("[[1, 1, 1]][0][0]", Object::Integer(1)),
+        ("[][0]", Object::Null),
+        ("[1, 2, 3][99]", Object::Null),
+        ("[1][-1]", Object::Null),
+        ("{1: 1, 2: 2}[1]", Object::Integer(1)),
+        ("{1: 1, 2: 2}[2]", Object::Integer(2)),
+        ("{1: 1}[0]", Object::Null),
+        ("{}[0]", Object::Null),
+    ];
+
+    for (input, expected) in tests {
+        run_test_case(input, expected)?;
+    }
+
+    Ok(())
+}

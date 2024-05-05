@@ -125,6 +125,7 @@ impl VirtualMachine {
                     self.sp -= length;
                     self.push(hash_map)?;
                 }
+                Instruction::Index => self.execute_index_expression()?,
             }
 
             ip += 1
@@ -255,5 +256,49 @@ impl VirtualMachine {
             .collect();
 
         hash_map.map(|hm| Object::HashMap(Rc::new(hm)))
+    }
+
+    fn execute_index_expression(&mut self) -> Result<()> {
+        let index = self.pop();
+        let left = self.pop();
+
+        match left {
+            Object::Array(arr) => self.execute_array_index(&arr, index),
+            Object::HashMap(hash) => self.execute_hash_index(&hash, index),
+            _ => Err(Error::IndexOperatorNotSupported(
+                left.data_type().to_string(),
+                index.data_type().to_string(),
+            )),
+        }
+    }
+
+    fn execute_array_index(&mut self, arr: &[Object], index: Object) -> Result<()> {
+        let Object::Integer(idx) = index else {
+            return Err(Error::IndexOperatorNotSupported(
+                "ARRAY".to_string(),
+                index.data_type().to_string(),
+            ));
+        };
+
+        if idx < 0 {
+            self.push(Object::Null)?;
+            return Ok(());
+        }
+        if (idx as usize) >= arr.len() {
+            self.push(Object::Null)?;
+            return Ok(());
+        }
+
+        self.push(arr[idx as usize].clone())?;
+        Ok(())
+    }
+
+    fn execute_hash_index(&mut self, hash: &HashMap<HashKey, Object>, index: Object) -> Result<()> {
+        let key: HashKey = index.try_into().map_err(Error::UnhashableKey)?;
+
+        let obj = hash.get(&key).unwrap_or(&Object::Null);
+        self.push(obj.clone())?;
+
+        Ok(())
     }
 }

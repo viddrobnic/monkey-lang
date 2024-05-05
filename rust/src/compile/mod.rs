@@ -145,7 +145,12 @@ impl Compiler {
             ast::Expression::If { .. } => self.compile_conditional(expression)?,
             ast::Expression::FunctionLiteral { .. } => todo!(),
             ast::Expression::FunctionCall { .. } => todo!(),
-            ast::Expression::Index { .. } => todo!(),
+            ast::Expression::Index { left, index } => {
+                self.compile_expression(left)?;
+                self.compile_expression(index)?;
+
+                self.emit(Instruction::Index);
+            }
         }
 
         Ok(())

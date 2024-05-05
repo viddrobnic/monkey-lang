@@ -32,6 +32,7 @@ pub enum Instruction {
 
     Array(u16),
     Hash(u16),
+    Index,
 }
 
 #[derive(Debug, PartialEq)]
