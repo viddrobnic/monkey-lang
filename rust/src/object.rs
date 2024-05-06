@@ -1,4 +1,4 @@
-use crate::{ast, environment::Environment};
+use crate::{ast, code::Instruction, environment::Environment};
 
 use std::{collections::HashMap, fmt::Display, rc::Rc};
 
@@ -13,6 +13,7 @@ pub enum Object {
     Array(Rc<Vec<Object>>),
     HashMap(Rc<HashMap<HashKey, Object>>),
     Null,
+    CompiledFunction(Rc<Vec<Instruction>>),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -26,6 +27,7 @@ pub enum DataType {
     Array,
     HashMap,
     Null,
+    CompiledFunction,
 }
 
 impl From<&Object> for DataType {
@@ -40,6 +42,7 @@ impl From<&Object> for DataType {
             Object::Array(_) => Self::Array,
             Object::HashMap(_) => Self::HashMap,
             Object::Null => Self::Null,
+            Object::CompiledFunction(_) => Self::CompiledFunction,
         }
     }
 }
@@ -62,6 +65,7 @@ impl Display for DataType {
             DataType::Array => "ARRAY",
             DataType::HashMap => "HASH_MAP",
             DataType::Null => "NULL",
+            DataType::CompiledFunction => "COMPILED_FUNCTION",
         };
 
         f.write_str(string)
@@ -95,6 +99,7 @@ impl Object {
                 format!("{{{}}}", elements)
             }
             Object::Null => "null".to_string(),
+            Object::CompiledFunction(inst) => format!("compiled function: {:?}", inst.as_ptr()),
         }
     }
 

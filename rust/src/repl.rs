@@ -77,7 +77,7 @@ pub fn start_vm(input: impl io::Read, mut output: impl io::Write) {
             continue;
         }
 
-        if let Err(err) = vm.run(compiler.bytecode()) {
+        if let Err(err) = vm.run(&compiler.bytecode()) {
             writeln!(output, "Woops! Executing bytecode failed: {}", err).unwrap();
             continue;
         }

@@ -33,25 +33,13 @@ pub enum Instruction {
     Array(u16),
     Hash(u16),
     Index,
+
+    Call,
+    ReturnValue,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Bytecode {
-    pub instructions: Vec<Instruction>,
-    pub constants: Vec<object::Object>,
-}
-
-impl Bytecode {
-    pub fn new() -> Self {
-        Self {
-            instructions: Vec::new(),
-            constants: Vec::new(),
-        }
-    }
-}
-
-impl Default for Bytecode {
-    fn default() -> Self {
-        Self::new()
-    }
+pub struct Bytecode<'a> {
+    pub instructions: &'a [Instruction],
+    pub constants: &'a [object::Object],
 }

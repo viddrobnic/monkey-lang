@@ -15,7 +15,7 @@ fn run_test_case(input: &str, expected: Object) -> Result<()> {
     compiler.compile(&program).unwrap();
 
     let mut vm = VirtualMachine::new();
-    vm.run(compiler.bytecode())?;
+    vm.run(&compiler.bytecode())?;
 
     assert_eq!(*vm.last_popped(), expected);
 

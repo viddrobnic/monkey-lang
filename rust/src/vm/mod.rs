@@ -126,6 +126,8 @@ impl VirtualMachine {
                     self.push(hash_map)?;
                 }
                 Instruction::Index => self.execute_index_expression()?,
+                Instruction::Call => todo!(),
+                Instruction::ReturnValue => todo!(),
             }
 
             ip += 1
