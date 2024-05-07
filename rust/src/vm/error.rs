@@ -14,6 +14,8 @@ pub enum Error {
     UnhashableKey(DataType),
     #[error("index operator not supported: {0}[{1}]")]
     IndexOperatorNotSupported(DataType, DataType),
+    #[error("calling non function")]
+    NotAFunction,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -17,13 +17,13 @@ fn run_test_case(case: TestCase) -> Result<()> {
     let program = parse(case.input).unwrap();
 
     let mut compiler = Compiler::new();
-    compiler.compile(&program)?;
+    let bytecode = compiler.compile(&program)?;
 
     let expected_bytecode = Bytecode {
-        instructions: &case.expected_instructions,
+        instructions: Rc::new(case.expected_instructions),
         constants: &case.expected_constants,
     };
-    assert_eq!(compiler.bytecode(), expected_bytecode);
+    assert_eq!(bytecode, expected_bytecode);
 
     Ok(())
 }

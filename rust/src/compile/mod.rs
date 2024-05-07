@@ -47,7 +47,7 @@ impl Compiler {
     /// but the state (globals, constants, ...) is left unchanged.
     /// If you don't want to keep the state between compilations,
     /// initialize a new compiler.
-    pub fn compile(&mut self, program: &ast::Program) -> Result<()> {
+    pub fn compile(&mut self, program: &ast::Program) -> Result<Bytecode> {
         self.scopes = vec![vec![]];
         self.scope_index = 0;
 
@@ -55,15 +55,12 @@ impl Compiler {
             self.compile_statement(stmt)?;
         }
 
-        Ok(())
-    }
-
-    /// Returns the current bytecode.
-    pub fn bytecode(&self) -> Bytecode {
-        Bytecode {
-            instructions: &self.scopes[0],
+        // There should only be one scope if compiler works correctly
+        let instructions = self.scopes.pop().expect("Invalid number of scopes!");
+        Ok(Bytecode {
+            instructions: Rc::new(instructions),
             constants: &self.constants,
-        }
+        })
     }
 }
 
@@ -101,9 +98,9 @@ impl Compiler {
     fn compile_statement(&mut self, statement: &ast::Statement) -> Result<()> {
         match statement {
             ast::Statement::Let { name, value } => {
-                self.compile_expression(value)?;
-
                 let symbol = self.symbol_table.define(name.clone());
+
+                self.compile_expression(value)?;
                 self.emit(Instruction::SetGlobal(symbol.index));
             }
             ast::Statement::Return(expr) => {

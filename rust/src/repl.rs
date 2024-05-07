@@ -72,12 +72,15 @@ pub fn start_vm(input: impl io::Read, mut output: impl io::Write) {
             continue;
         };
 
-        if let Err(err) = compiler.compile(&program) {
-            writeln!(output, "Woops! Compiling the program failed: {}", err).unwrap();
-            continue;
-        }
+        let bytecode = match compiler.compile(&program) {
+            Ok(b) => b,
+            Err(err) => {
+                writeln!(output, "Woops! Compiling the program failed: {}", err).unwrap();
+                continue;
+            }
+        };
 
-        if let Err(err) = vm.run(&compiler.bytecode()) {
+        if let Err(err) = vm.run(&bytecode) {
             writeln!(output, "Woops! Executing bytecode failed: {}", err).unwrap();
             continue;
         }

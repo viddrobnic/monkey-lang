@@ -5,6 +5,8 @@ mod test;
 
 pub mod error;
 
+mod frame;
+
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -12,8 +14,11 @@ use crate::code::{Bytecode, Instruction};
 use crate::object::{DataType, HashKey, Object};
 pub use error::*;
 
+use self::frame::Frame;
+
 const STACK_SIZE: usize = 2048;
 const GLOBALS_SIZE: usize = u16::MAX as usize;
+const FRAME_STACK_SIZE: usize = 1024;
 
 /// Virtual machine that can run the bytecode
 pub struct VirtualMachine {
@@ -23,6 +28,9 @@ pub struct VirtualMachine {
     sp: usize,
 
     globals: Vec<Object>,
+
+    frames: Vec<Option<Frame>>,
+    frame_index: usize,
 }
 
 impl VirtualMachine {
@@ -31,6 +39,8 @@ impl VirtualMachine {
             stack: vec![],
             sp: 0,
             globals: vec![Object::Null; GLOBALS_SIZE],
+            frames: vec![None; FRAME_STACK_SIZE],
+            frame_index: 0,
         }
     }
 }
@@ -69,18 +79,46 @@ impl VirtualMachine {
         self.stack[self.sp].clone()
     }
 
+    fn current_frame_mut(&mut self) -> &mut Frame {
+        let frame = &mut self.frames[self.frame_index - 1];
+        frame.as_mut().expect("Invalid frame index")
+    }
+
+    fn current_frame(&self) -> &Frame {
+        let frame = &self.frames[self.frame_index - 1];
+        frame.as_ref().expect("Invalid frame index")
+    }
+
+    fn push_frame(&mut self, frame: Frame) {
+        self.frames[self.frame_index] = Some(frame);
+        self.frame_index += 1;
+    }
+
+    fn pop_frame(&mut self) -> Frame {
+        self.frame_index -= 1;
+
+        let mut frame = None;
+        std::mem::swap(&mut frame, &mut self.frames[self.frame_index]);
+        frame.expect("Invalid frame index")
+    }
+
     /// Runs the bytecode.
     ///
     /// The stack of the VM is cleaned, but the globals are left
     /// unchanged. If you don't want to keep the globals between runs,
     /// initialize a new VirtualMachine.
     pub fn run(&mut self, bytecode: &Bytecode) -> Result<()> {
+        // Reinitialize the stack
         self.stack = vec![Object::Null; STACK_SIZE];
         self.sp = 0;
 
-        let mut ip = 0;
-        while ip < bytecode.instructions.len() {
-            let inst = &bytecode.instructions[ip];
+        // Reinitialize the frame stack
+        self.frames = vec![None; FRAME_STACK_SIZE];
+        self.frames[0] = Some(Frame::new(bytecode.instructions.clone()));
+        self.frame_index = 1;
+
+        while self.current_frame().ip < self.current_frame().instructions.len() {
+            let inst = &self.current_frame().instructions[self.current_frame().ip];
             match inst {
                 Instruction::Constant(idx) => {
                     self.push(bytecode.constants[*idx as usize].clone())?
@@ -100,14 +138,18 @@ impl VirtualMachine {
                 Instruction::Bang => self.execute_bang_operator()?,
                 Instruction::Minus => self.execute_minus_operator()?,
                 Instruction::JumpNotTruthy(pos) => {
+                    let pos = *pos;
                     let condition = self.pop();
                     if !condition.is_truthy() {
-                        ip = *pos as usize - 1;
+                        self.current_frame_mut().ip = pos as usize - 1;
                     }
                 }
-                Instruction::Jump(pos) => ip = *pos as usize - 1,
+                Instruction::Jump(pos) => self.current_frame_mut().ip = *pos as usize - 1,
                 Instruction::GetGlobal(idx) => self.push(self.globals[*idx as usize].clone())?,
-                Instruction::SetGlobal(idx) => self.globals[*idx as usize] = self.pop(),
+                Instruction::SetGlobal(idx) => {
+                    let idx = *idx;
+                    self.globals[idx as usize] = self.pop();
+                }
                 Instruction::Array(len) => {
                     let length = *len as usize;
                     let start = self.sp - length;
@@ -126,11 +168,29 @@ impl VirtualMachine {
                     self.push(hash_map)?;
                 }
                 Instruction::Index => self.execute_index_expression()?,
-                Instruction::Call => todo!(),
-                Instruction::ReturnValue => todo!(),
+                Instruction::Call => {
+                    let Some(Object::CompiledFunction(instructions)) = self.stack_top() else {
+                        return Err(Error::NotAFunction);
+                    };
+
+                    let frame = Frame::new(instructions.clone());
+                    self.push_frame(frame);
+
+                    // Continue so that we don't increment the instruction
+                    // pointer of the new frame.
+                    continue;
+                }
+                Instruction::ReturnValue => {
+                    let return_value = self.pop();
+
+                    self.pop_frame();
+                    self.pop();
+
+                    self.push(return_value)?;
+                }
             }
 
-            ip += 1
+            self.current_frame_mut().ip += 1
         }
 
         Ok(())

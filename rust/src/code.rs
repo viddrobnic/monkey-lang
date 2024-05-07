@@ -1,5 +1,7 @@
 //! Bytecode implementation
 
+use std::rc::Rc;
+
 use crate::object;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -40,6 +42,6 @@ pub enum Instruction {
 
 #[derive(Debug, PartialEq)]
 pub struct Bytecode<'a> {
-    pub instructions: &'a [Instruction],
+    pub instructions: Rc<Vec<Instruction>>,
     pub constants: &'a [object::Object],
 }

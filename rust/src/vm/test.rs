@@ -12,10 +12,10 @@ fn run_test_case(input: &str, expected: Object) -> Result<()> {
     let program = parse(input).unwrap();
 
     let mut compiler = Compiler::new();
-    compiler.compile(&program).unwrap();
+    let bytecode = compiler.compile(&program).unwrap();
 
     let mut vm = VirtualMachine::new();
-    vm.run(&compiler.bytecode())?;
+    vm.run(&bytecode)?;
 
     assert_eq!(*vm.last_popped(), expected);
 
@@ -221,6 +221,59 @@ fn test_index_expressions() -> Result<()> {
         ("{1: 1, 2: 2}[2]", Object::Integer(2)),
         ("{1: 1}[0]", Object::Null),
         ("{}[0]", Object::Null),
+    ];
+
+    for (input, expected) in tests {
+        run_test_case(input, expected)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn calling_functions() -> Result<()> {
+    let tests = [
+        (
+            "let fivePlusTen = fn() {5 + 10}; fivePlusTen()",
+            Object::Integer(15),
+        ),
+        (
+            r#"let one = fn() { 1; };
+               let two = fn() { 2; };
+               one() + two()"#,
+            Object::Integer(3),
+        ),
+        (
+            r#"let a = fn() { 1 };
+                let b = fn() { a() + 1 };
+                let c = fn() { b() + 1 };
+                c();"#,
+            Object::Integer(3),
+        ),
+        (
+            "let earlyExit = fn() { return 99; 100; }; earlyExit();",
+            Object::Integer(99),
+        ),
+        (
+            "let earlyExit = fn() { return 99; return 100; }; earlyExit();",
+            Object::Integer(99),
+        ),
+        ("let noReturn = fn() { }; noReturn();", Object::Null),
+        (
+            r#"
+            let noReturn = fn() { };
+            let noReturnTwo = fn() { noReturn(); };
+            noReturn();
+            noReturnTwo();"#,
+            Object::Null,
+        ),
+        (
+            r#"
+            let returnsOne = fn() { 1; };
+            let returnsOneReturner = fn() { returnsOne; };
+            returnsOneReturner()();"#,
+            Object::Integer(1),
+        ),
     ];
 
     for (input, expected) in tests {
