@@ -114,7 +114,7 @@ impl VirtualMachine {
 
         // Reinitialize the frame stack
         self.frames = vec![None; FRAME_STACK_SIZE];
-        self.frames[0] = Some(Frame::new(bytecode.instructions.clone()));
+        self.frames[0] = Some(Frame::new(bytecode.instructions.clone(), 0));
         self.frame_index = 1;
 
         while self.current_frame().ip < self.current_frame().instructions.len() {
@@ -169,11 +169,16 @@ impl VirtualMachine {
                 }
                 Instruction::Index => self.execute_index_expression()?,
                 Instruction::Call => {
-                    let Some(Object::CompiledFunction(instructions)) = self.stack_top() else {
+                    let Some(Object::CompiledFunction {
+                        instructions,
+                        num_locals,
+                    }) = self.stack_top()
+                    else {
                         return Err(Error::NotAFunction);
                     };
 
-                    let frame = Frame::new(instructions.clone());
+                    let frame = Frame::new(instructions.clone(), self.sp);
+                    self.sp = frame.base_pointer + *num_locals;
                     self.push_frame(frame);
 
                     // Continue so that we don't increment the instruction
@@ -183,13 +188,21 @@ impl VirtualMachine {
                 Instruction::ReturnValue => {
                     let return_value = self.pop();
 
-                    self.pop_frame();
-                    self.pop();
+                    let frame = self.pop_frame();
+                    self.sp = frame.base_pointer - 1; // Substract 1 to remove the function object from the stack
 
                     self.push(return_value)?;
                 }
-                Instruction::GetLocal(_) => todo!(),
-                Instruction::SetLocal(_) => todo!(),
+                Instruction::SetLocal(idx) => {
+                    let frame = self.current_frame();
+                    let idx = frame.base_pointer + (*idx as usize);
+                    self.stack[idx] = self.pop();
+                }
+                Instruction::GetLocal(idx) => {
+                    let frame = self.current_frame();
+                    let idx = frame.base_pointer + (*idx as usize);
+                    self.push(self.stack[idx].clone())?;
+                }
             }
 
             self.current_frame_mut().ip += 1

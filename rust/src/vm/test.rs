@@ -282,3 +282,50 @@ fn calling_functions() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_calling_functions_with_bindings() -> Result<()> {
+    let tests = [
+        (
+            r#"let one = fn() { let one = 1; one };
+                one();"#,
+            Object::Integer(1),
+        ),
+        (
+            r#"let oneAndTwo = fn() { let one = 1; let two = 2; one + two; };
+                oneAndTwo();"#,
+            Object::Integer(3),
+        ),
+        (
+            r#"let oneAndTwo = fn() { let one = 1; let two = 2; one + two; };
+                let threeAndFour = fn() { let three = 3; let four = 4; three + four; };
+                oneAndTwo() + threeAndFour();"#,
+            Object::Integer(10),
+        ),
+        (
+            r#"let firstFoobar = fn() { let foobar = 50; foobar; };
+                let secondFoobar = fn() { let foobar = 100; foobar; };
+                firstFoobar() + secondFoobar();"#,
+            Object::Integer(150),
+        ),
+        (
+            r#"let globalSeed = 50;
+                let minusOne = fn() {
+                    let num = 1;
+                    globalSeed - num;
+                }
+                let minusTwo = fn() {
+                    let num = 2;
+                    globalSeed - num;
+                }
+                minusOne() + minusTwo();"#,
+            Object::Integer(97),
+        ),
+    ];
+
+    for (input, expected) in tests {
+        run_test_case(input, expected)?;
+    }
+
+    Ok(())
+}

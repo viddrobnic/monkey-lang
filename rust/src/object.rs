@@ -13,7 +13,10 @@ pub enum Object {
     Array(Rc<Vec<Object>>),
     HashMap(Rc<HashMap<HashKey, Object>>),
     Null,
-    CompiledFunction(Rc<Vec<Instruction>>),
+    CompiledFunction {
+        instructions: Rc<Vec<Instruction>>,
+        num_locals: usize,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -42,7 +45,7 @@ impl From<&Object> for DataType {
             Object::Array(_) => Self::Array,
             Object::HashMap(_) => Self::HashMap,
             Object::Null => Self::Null,
-            Object::CompiledFunction(_) => Self::CompiledFunction,
+            Object::CompiledFunction { .. } => Self::CompiledFunction,
         }
     }
 }
@@ -99,7 +102,10 @@ impl Object {
                 format!("{{{}}}", elements)
             }
             Object::Null => "null".to_string(),
-            Object::CompiledFunction(inst) => format!("compiled function: {:?}", inst.as_ptr()),
+            Object::CompiledFunction {
+                instructions,
+                num_locals: _,
+            } => format!("compiled function: {:?}", instructions.as_ptr()),
         }
     }
 

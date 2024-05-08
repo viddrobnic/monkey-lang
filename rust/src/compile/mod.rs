@@ -313,8 +313,12 @@ impl Compiler {
             self.current_instructions()[idx] = Instruction::ReturnValue;
         }
 
+        let num_locals = self.symbol_table.num_definitions();
         let instructions = self.leave_scope();
-        let compiled_fn = Object::CompiledFunction(Rc::new(instructions));
+        let compiled_fn = Object::CompiledFunction {
+            instructions: Rc::new(instructions),
+            num_locals,
+        };
 
         let constant_idx = self.add_constant(compiled_fn);
         self.emit(Instruction::Constant(constant_idx as u16));

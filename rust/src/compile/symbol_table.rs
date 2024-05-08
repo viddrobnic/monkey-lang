@@ -69,6 +69,10 @@ impl SymbolTable {
             None => None,
         }
     }
+
+    pub fn num_definitions(&self) -> usize {
+        self.num_definitions as usize
+    }
 }
 
 impl Default for SymbolTable {
