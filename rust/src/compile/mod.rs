@@ -15,7 +15,7 @@ use crate::ast;
 use crate::code::{Bytecode, Instruction};
 use crate::object::Object;
 
-use self::symbol_table::SymbolTable;
+use self::symbol_table::{SymbolScope, SymbolTable};
 
 pub use error::*;
 
@@ -88,11 +88,17 @@ impl Compiler {
     fn enter_scope(&mut self) {
         self.scopes.push(vec![]);
         self.scope_index += 1;
+
+        self.symbol_table.enclose();
     }
 
     fn leave_scope(&mut self) -> Vec<Instruction> {
         self.scope_index -= 1;
-        self.scopes.pop().unwrap_or_default()
+        let instructions = self.scopes.pop().unwrap_or_default();
+
+        self.symbol_table.leave();
+
+        instructions
     }
 
     fn compile_statement(&mut self, statement: &ast::Statement) -> Result<()> {
@@ -101,7 +107,10 @@ impl Compiler {
                 let symbol = self.symbol_table.define(name.clone());
 
                 self.compile_expression(value)?;
-                self.emit(Instruction::SetGlobal(symbol.index));
+                match symbol.scope {
+                    SymbolScope::Global => self.emit(Instruction::SetGlobal(symbol.index)),
+                    SymbolScope::Local => self.emit(Instruction::SetLocal(symbol.index as u8)),
+                };
             }
             ast::Statement::Return(expr) => {
                 self.compile_expression(expr)?;
@@ -122,7 +131,12 @@ impl Compiler {
                 let symbol = self.symbol_table.resolve(ident);
                 match symbol {
                     Some(symbol) => {
-                        self.emit(Instruction::GetGlobal(symbol.index));
+                        match symbol.scope {
+                            SymbolScope::Global => self.emit(Instruction::GetGlobal(symbol.index)),
+                            SymbolScope::Local => {
+                                self.emit(Instruction::GetLocal(symbol.index as u8))
+                            }
+                        };
                     }
                     None => return Err(Error::UndefinedSymbol(ident.to_string())),
                 }

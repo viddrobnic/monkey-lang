@@ -518,7 +518,7 @@ fn test_functions() -> Result<()> {
                 Object::Integer(42),
                 Object::CompiledFunction(Rc::new(vec![
                     Instruction::Constant(0),
-                    Instruction::SetGlobal(0),
+                    Instruction::SetLocal(0),
                     Instruction::Null,
                     Instruction::ReturnValue,
                 ])),
@@ -568,6 +568,70 @@ fn test_function_calls() -> Result<()> {
                 Instruction::Call,
                 Instruction::Pop,
             ],
+        },
+    ];
+
+    for case in tests {
+        run_test_case(case)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_local_statement_scopes() -> Result<()> {
+    let tests = [
+        TestCase {
+            input: "let num = 55; fn() {num}",
+            expected_constants: vec![
+                Object::Integer(55),
+                Object::CompiledFunction(Rc::new(vec![
+                    Instruction::GetGlobal(0),
+                    Instruction::ReturnValue,
+                ])),
+            ],
+            expected_instructions: vec![
+                Instruction::Constant(0),
+                Instruction::SetGlobal(0),
+                Instruction::Constant(1),
+                Instruction::Pop,
+            ],
+        },
+        TestCase {
+            input: "fn() {let num = 55; num}",
+            expected_constants: vec![
+                Object::Integer(55),
+                Object::CompiledFunction(Rc::new(vec![
+                    Instruction::Constant(0),
+                    Instruction::SetLocal(0),
+                    Instruction::GetLocal(0),
+                    Instruction::ReturnValue,
+                ])),
+            ],
+            expected_instructions: vec![Instruction::Constant(1), Instruction::Pop],
+        },
+        TestCase {
+            input: r#"
+                fn () {
+                    let a = 55;
+                    let b = 77
+                    a + b
+                }"#,
+            expected_constants: vec![
+                Object::Integer(55),
+                Object::Integer(77),
+                Object::CompiledFunction(Rc::new(vec![
+                    Instruction::Constant(0),
+                    Instruction::SetLocal(0),
+                    Instruction::Constant(1),
+                    Instruction::SetLocal(1),
+                    Instruction::GetLocal(0),
+                    Instruction::GetLocal(1),
+                    Instruction::Add,
+                    Instruction::ReturnValue,
+                ])),
+            ],
+            expected_instructions: vec![Instruction::Constant(2), Instruction::Pop],
         },
     ];
 

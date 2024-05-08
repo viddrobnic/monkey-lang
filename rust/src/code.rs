@@ -32,6 +32,9 @@ pub enum Instruction {
     GetGlobal(u16),
     SetGlobal(u16),
 
+    GetLocal(u8),
+    SetLocal(u8),
+
     Array(u16),
     Hash(u16),
     Index,

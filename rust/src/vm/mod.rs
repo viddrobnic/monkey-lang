@@ -188,6 +188,8 @@ impl VirtualMachine {
 
                     self.push(return_value)?;
                 }
+                Instruction::GetLocal(_) => todo!(),
+                Instruction::SetLocal(_) => todo!(),
             }
 
             self.current_frame_mut().ip += 1
