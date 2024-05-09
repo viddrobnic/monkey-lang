@@ -6,7 +6,7 @@ use crate::{
     parse::parse,
 };
 
-use super::{Result, VirtualMachine};
+use super::{Error, Result, VirtualMachine};
 
 fn run_test_case(input: &str, expected: Object) -> Result<()> {
     let program = parse(input).unwrap();
@@ -20,6 +20,18 @@ fn run_test_case(input: &str, expected: Object) -> Result<()> {
     assert_eq!(*vm.last_popped(), expected);
 
     Ok(())
+}
+
+fn run_error_test_case(input: &str, expected: Error) {
+    let program = parse(input).unwrap();
+
+    let mut compiler = Compiler::new();
+    let bytecode = compiler.compile(&program).unwrap();
+
+    let mut vm = VirtualMachine::new();
+    let res = vm.run(&bytecode);
+
+    assert_eq!(res, Err(expected));
 }
 
 #[test]
@@ -328,4 +340,90 @@ fn test_calling_functions_with_bindings() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[test]
+fn test_calling_functions_with_arguments_and_bindings() -> Result<()> {
+    let tests = [
+        (
+            "let identity = fn(a) { a }; identity(4)",
+            Object::Integer(4),
+        ),
+        (
+            "let sum = fn(a, b) { a + b; }; sum(1, 2)",
+            Object::Integer(3),
+        ),
+        (
+            r#"
+        let sum = fn(a, b) {
+            let c = a + b;
+            c
+        };
+        sum(1, 2);"#,
+            Object::Integer(3),
+        ),
+        (
+            r#"
+        let sum = fn(a, b) {
+            let c = a + b;
+            c;
+        };
+        sum(1, 2) + sum(3, 4);"#,
+            Object::Integer(10),
+        ),
+        (
+            r#"
+        let sum = fn(a, b) {
+            let c = a + b;
+            c;
+        };
+        let outer = fn() {
+            sum(1, 2) + sum(3, 4);
+        };
+        outer();
+        "#,
+            Object::Integer(10),
+        ),
+        (
+            r#"
+        let globalNum = 10;
+        let sum = fn(a, b) {
+            let c = a + b;
+            c + globalNum;
+        };
+        let outer = fn() {
+            sum(1, 2) + sum(3, 4) + globalNum;
+        };
+        outer() + globalNum;"#,
+            Object::Integer(50),
+        ),
+    ];
+
+    for (input, expected) in tests {
+        run_test_case(input, expected)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_calling_functions_with_wrong_arguments() {
+    let tests = [
+        (
+            "fn() { 1; }(1);",
+            Error::WrongNumberOfArguments { want: 0, got: 1 },
+        ),
+        (
+            "fn(a) { a; }()",
+            Error::WrongNumberOfArguments { want: 1, got: 0 },
+        ),
+        (
+            "fn(a, b) { a + b; }(1);",
+            Error::WrongNumberOfArguments { want: 2, got: 1 },
+        ),
+    ];
+
+    for (input, expected) in tests {
+        run_error_test_case(input, expected);
+    }
 }

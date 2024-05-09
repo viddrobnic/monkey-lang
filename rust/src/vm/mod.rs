@@ -168,16 +168,26 @@ impl VirtualMachine {
                     self.push(hash_map)?;
                 }
                 Instruction::Index => self.execute_index_expression()?,
-                Instruction::Call => {
-                    let Some(Object::CompiledFunction {
+                Instruction::Call(num_args) => {
+                    let num_args = *num_args as usize;
+
+                    let Object::CompiledFunction {
                         instructions,
                         num_locals,
-                    }) = self.stack_top()
+                        num_arguments,
+                    } = &self.stack[self.sp - num_args - 1]
                     else {
                         return Err(Error::NotAFunction);
                     };
 
-                    let frame = Frame::new(instructions.clone(), self.sp);
+                    if num_args != *num_arguments {
+                        return Err(Error::WrongNumberOfArguments {
+                            want: *num_arguments,
+                            got: num_args,
+                        });
+                    }
+
+                    let frame = Frame::new(instructions.clone(), self.sp - num_args);
                     self.sp = frame.base_pointer + *num_locals;
                     self.push_frame(frame);
 

@@ -16,6 +16,7 @@ pub enum Object {
     CompiledFunction {
         instructions: Rc<Vec<Instruction>>,
         num_locals: usize,
+        num_arguments: usize,
     },
 }
 
@@ -102,10 +103,9 @@ impl Object {
                 format!("{{{}}}", elements)
             }
             Object::Null => "null".to_string(),
-            Object::CompiledFunction {
-                instructions,
-                num_locals: _,
-            } => format!("compiled function: {:?}", instructions.as_ptr()),
+            Object::CompiledFunction { instructions, .. } => {
+                format!("compiled function: {:?}", instructions.as_ptr())
+            }
         }
     }
 

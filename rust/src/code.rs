@@ -39,7 +39,7 @@ pub enum Instruction {
     Hash(u16),
     Index,
 
-    Call,
+    Call(u8),
     ReturnValue,
 }
 

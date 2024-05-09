@@ -16,6 +16,8 @@ pub enum Error {
     IndexOperatorNotSupported(DataType, DataType),
     #[error("calling non function")]
     NotAFunction,
+    #[error("wrong number of arguments, want: {want}, got: {got}")]
+    WrongNumberOfArguments { want: usize, got: usize },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

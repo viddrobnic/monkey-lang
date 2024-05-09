@@ -184,10 +184,15 @@ impl Compiler {
             ast::Expression::FunctionLiteral { .. } => self.compile_function_literal(expression)?,
             ast::Expression::FunctionCall {
                 function,
-                arguments: _,
+                arguments,
             } => {
                 self.compile_expression(function)?;
-                self.emit(Instruction::Call);
+
+                for arg in arguments {
+                    self.compile_expression(arg)?;
+                }
+
+                self.emit(Instruction::Call(arguments.len() as u8));
             }
             ast::Expression::Index { left, index } => {
                 self.compile_expression(left)?;
@@ -297,15 +302,15 @@ impl Compiler {
     }
 
     fn compile_function_literal(&mut self, expression: &ast::Expression) -> Result<()> {
-        let ast::Expression::FunctionLiteral {
-            parameters: _,
-            body,
-        } = expression
-        else {
+        let ast::Expression::FunctionLiteral { parameters, body } = expression else {
             panic!("Expected FunctionLiteral, got: {:?}", expression);
         };
 
         self.enter_scope();
+
+        for par in parameters {
+            self.symbol_table.define(par.clone());
+        }
 
         self.compile_block_statement(body)?;
         if self.current_instructions().last() == Some(&Instruction::Pop) {
@@ -318,6 +323,7 @@ impl Compiler {
         let compiled_fn = Object::CompiledFunction {
             instructions: Rc::new(instructions),
             num_locals,
+            num_arguments: parameters.len(),
         };
 
         let constant_idx = self.add_constant(compiled_fn);
