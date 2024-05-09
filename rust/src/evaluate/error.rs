@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use super::DataType;
+use super::{builtin, DataType};
 
 #[derive(Debug, Error, PartialEq)]
 pub enum Error {
@@ -12,12 +12,15 @@ pub enum Error {
     UnknownIdentifier(String),
     #[error("not a function: {0}")]
     NotAFunction(DataType),
-    #[error("wrong number of arguments: expected {expected}, got {got}")]
-    WrongNumberOfArguments { expected: usize, got: usize },
     #[error("index operator not supported: {0}[{1}]")]
     IndexOperatorNotSupported(DataType, DataType),
     #[error("not hashable: {0}")]
     NotHashable(DataType),
+    #[error("builtin function error: {source}")]
+    BuiltinFunction {
+        #[from]
+        source: builtin::ExecutionError,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

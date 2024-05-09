@@ -1,6 +1,9 @@
-use crate::{ast, code::Instruction, environment::Environment};
+pub mod builtin;
 
 use std::{collections::HashMap, fmt::Display, rc::Rc};
+
+use crate::{ast, code::Instruction, environment::Environment};
+use builtin::*;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Object {
@@ -157,30 +160,6 @@ impl TryFrom<Object> for HashKey {
             Object::Integer(i) => Ok(Self::Integer(i)),
             Object::Boolean(b) => Ok(Self::Boolean(b)),
             _ => Err(value.into()),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum BuiltinFunction {
-    Len,
-    First,
-    Last,
-    Rest,
-    Push,
-    Puts,
-}
-
-impl BuiltinFunction {
-    pub(crate) fn from_ident(ident: &str) -> Option<Self> {
-        match ident {
-            "len" => Some(Self::Len),
-            "first" => Some(Self::First),
-            "last" => Some(Self::Last),
-            "rest" => Some(Self::Rest),
-            "push" => Some(Self::Push),
-            "puts" => Some(Self::Puts),
-            _ => None,
         }
     }
 }

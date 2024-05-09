@@ -5,7 +5,7 @@ use crate::{
     parse,
 };
 
-use super::DataType;
+use super::{builtin::ExecutionError, DataType};
 
 #[test]
 fn test_eval_integer() -> Result<()> {
@@ -465,12 +465,19 @@ fn test_builtin_functions() {
         ("len(\"\")", Ok(Object::Integer(0))),
         ("len(\"four\")", Ok(Object::Integer(4))),
         ("len(\"hello world\")", Ok(Object::Integer(11))),
-        ("len(1)", Err(Error::TypeMismatch("INTEGER".to_string()))),
+        (
+            "len(1)",
+            Err(Error::BuiltinFunction {
+                source: ExecutionError::TypeMismatch(DataType::Integer.to_string()),
+            }),
+        ),
         (
             "len(\"one\", \"two\")",
-            Err(Error::WrongNumberOfArguments {
-                expected: 1,
-                got: 2,
+            Err(Error::BuiltinFunction {
+                source: ExecutionError::WrongNumberOfArguments {
+                    expected: 1,
+                    got: 2,
+                },
             }),
         ),
         (

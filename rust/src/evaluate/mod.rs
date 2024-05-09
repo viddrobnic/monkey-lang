@@ -1,4 +1,3 @@
-mod builtin;
 mod error;
 
 #[cfg(test)]
@@ -12,6 +11,8 @@ use crate::environment::{Environment, EnvironmentOwner};
 use crate::object::*;
 
 pub use error::*;
+
+use self::builtin::BuiltinFunction;
 
 pub struct Evaluator {
     environment: Environment,
@@ -353,7 +354,7 @@ impl Evaluator {
                     _ => Ok(evaluated),
                 }
             }
-            Object::Builtin(fun) => builtin::execute(&fun, args),
+            Object::Builtin(fun) => Ok(fun.execute(args)?),
             _ => Err(Error::NotAFunction(function.into())),
         }
     }
