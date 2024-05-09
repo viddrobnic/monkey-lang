@@ -213,6 +213,7 @@ impl VirtualMachine {
                     let idx = frame.base_pointer + (*idx as usize);
                     self.push(self.stack[idx].clone())?;
                 }
+                Instruction::GetBuiltin(_) => todo!(),
             }
 
             self.current_frame_mut().ip += 1

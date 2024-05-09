@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::{
     code::{Bytecode, Instruction},
     compile::{Compiler, Result},
-    object::Object,
+    object::{builtin::BuiltinFunction, Object},
     parse::parse,
 };
 
@@ -708,6 +708,47 @@ fn test_local_statement_scopes() -> Result<()> {
                 },
             ],
             expected_instructions: vec![Instruction::Constant(2), Instruction::Pop],
+        },
+    ];
+
+    for case in tests {
+        run_test_case(case)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_builtin() -> Result<()> {
+    let tests = [
+        TestCase {
+            input: "len([]); push([], 1);",
+            expected_constants: vec![Object::Integer(1)],
+            expected_instructions: vec![
+                Instruction::GetBuiltin(BuiltinFunction::Len),
+                Instruction::Array(0),
+                Instruction::Call(1),
+                Instruction::Pop,
+                Instruction::GetBuiltin(BuiltinFunction::Push),
+                Instruction::Array(0),
+                Instruction::Constant(0),
+                Instruction::Call(2),
+                Instruction::Pop,
+            ],
+        },
+        TestCase {
+            input: "fn() { len([]) }",
+            expected_constants: vec![Object::CompiledFunction {
+                instructions: Rc::new(vec![
+                    Instruction::GetBuiltin(BuiltinFunction::Len),
+                    Instruction::Array(0),
+                    Instruction::Call(1),
+                    Instruction::ReturnValue,
+                ]),
+                num_locals: 0,
+                num_arguments: 0,
+            }],
+            expected_instructions: vec![Instruction::Constant(0), Instruction::Pop],
         },
     ];
 

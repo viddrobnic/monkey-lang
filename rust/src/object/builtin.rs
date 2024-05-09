@@ -12,7 +12,7 @@ pub enum ExecutionError {
     WrongNumberOfArguments { expected: usize, got: usize },
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum BuiltinFunction {
     Len,
     First,
@@ -32,6 +32,17 @@ impl BuiltinFunction {
             "push" => Some(Self::Push),
             "puts" => Some(Self::Puts),
             _ => None,
+        }
+    }
+
+    pub fn ident(&self) -> &'static str {
+        match self {
+            BuiltinFunction::Len => "len",
+            BuiltinFunction::First => "first",
+            BuiltinFunction::Last => "last",
+            BuiltinFunction::Rest => "rest",
+            BuiltinFunction::Push => "push",
+            BuiltinFunction::Puts => "puts",
         }
     }
 

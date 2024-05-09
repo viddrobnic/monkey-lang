@@ -13,7 +13,7 @@ use std::rc::Rc;
 
 use crate::ast;
 use crate::code::{Bytecode, Instruction};
-use crate::object::Object;
+use crate::object::{builtin, Object};
 
 use self::symbol_table::{SymbolScope, SymbolTable};
 
@@ -138,7 +138,12 @@ impl Compiler {
                             }
                         };
                     }
-                    None => return Err(Error::UndefinedSymbol(ident.to_string())),
+                    None => match builtin::BuiltinFunction::from_ident(ident) {
+                        Some(bltin) => {
+                            self.emit(Instruction::GetBuiltin(bltin));
+                        }
+                        None => return Err(Error::UndefinedSymbol(ident.to_string())),
+                    },
                 }
             }
             ast::Expression::IntegerLiteral(val) => {

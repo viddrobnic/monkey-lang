@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use crate::object;
+use crate::object::{self, builtin};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Instruction {
@@ -34,6 +34,7 @@ pub enum Instruction {
 
     GetLocal(u8),
     SetLocal(u8),
+    GetBuiltin(builtin::BuiltinFunction),
 
     Array(u16),
     Hash(u16),
