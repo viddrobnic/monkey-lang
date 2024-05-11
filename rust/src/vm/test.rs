@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use crate::{
     compile::Compiler,
-    object::{HashKey, Object},
+    object::{builtin::ExecutionError, DataType, HashKey, Object},
     parse::parse,
 };
 
@@ -425,5 +425,47 @@ fn test_calling_functions_with_wrong_arguments() {
 
     for (input, expected) in tests {
         run_error_test_case(input, expected);
+    }
+}
+
+#[test]
+fn test_builtin_functions() {
+    let tests = [
+        ("len(\"\")", Ok(Object::Integer(0))),
+        ("len(\"four\")", Ok(Object::Integer(4))),
+        ("len(\"hello world\")", Ok(Object::Integer(11))),
+        (
+            "len(1)",
+            Err(Error::BuiltinFunction {
+                source: ExecutionError::TypeMismatch(DataType::Integer.to_string()),
+            }),
+        ),
+        (
+            "len(\"one\", \"two\")",
+            Err(Error::BuiltinFunction {
+                source: ExecutionError::WrongNumberOfArguments {
+                    expected: 1,
+                    got: 2,
+                },
+            }),
+        ),
+    ];
+
+    for (input, expected) in tests {
+        let program = parse(input).unwrap();
+
+        let mut compiler = Compiler::new();
+        let bytecode = compiler.compile(&program).unwrap();
+
+        let mut vm = VirtualMachine::new();
+        let res = vm.run(&bytecode);
+        match expected {
+            Ok(obj) => {
+                println!("{:?}", bytecode);
+                assert_eq!(res, Ok(()));
+                assert_eq!(*vm.last_popped(), obj);
+            }
+            Err(err) => assert_eq!(res, Err(err)),
+        }
     }
 }

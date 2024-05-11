@@ -354,7 +354,7 @@ impl Evaluator {
                     _ => Ok(evaluated),
                 }
             }
-            Object::Builtin(fun) => Ok(fun.execute(args)?),
+            Object::Builtin(fun) => Ok(fun.execute(&args)?),
             _ => Err(Error::NotAFunction(function.into())),
         }
     }

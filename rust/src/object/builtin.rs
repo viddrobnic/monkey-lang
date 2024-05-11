@@ -46,7 +46,7 @@ impl BuiltinFunction {
         }
     }
 
-    pub fn execute(&self, args: Vec<Object>) -> Result<Object, ExecutionError> {
+    pub fn execute(&self, args: &[Object]) -> Result<Object, ExecutionError> {
         match self {
             BuiltinFunction::Len => execute_len(args),
             BuiltinFunction::First => execute_first(args),
@@ -58,7 +58,7 @@ impl BuiltinFunction {
     }
 }
 
-fn execute_len(args: Vec<Object>) -> Result<Object, ExecutionError> {
+fn execute_len(args: &[Object]) -> Result<Object, ExecutionError> {
     if args.len() != 1 {
         return Err(ExecutionError::WrongNumberOfArguments {
             expected: 1,
@@ -75,7 +75,7 @@ fn execute_len(args: Vec<Object>) -> Result<Object, ExecutionError> {
     }
 }
 
-fn execute_first(args: Vec<Object>) -> Result<Object, ExecutionError> {
+fn execute_first(args: &[Object]) -> Result<Object, ExecutionError> {
     if args.len() != 1 {
         return Err(ExecutionError::WrongNumberOfArguments {
             expected: 1,
@@ -96,7 +96,7 @@ fn execute_first(args: Vec<Object>) -> Result<Object, ExecutionError> {
     }
 }
 
-fn execute_last(args: Vec<Object>) -> Result<Object, ExecutionError> {
+fn execute_last(args: &[Object]) -> Result<Object, ExecutionError> {
     if args.len() != 1 {
         return Err(ExecutionError::WrongNumberOfArguments {
             expected: 1,
@@ -117,7 +117,7 @@ fn execute_last(args: Vec<Object>) -> Result<Object, ExecutionError> {
     }
 }
 
-fn execute_rest(args: Vec<Object>) -> Result<Object, ExecutionError> {
+fn execute_rest(args: &[Object]) -> Result<Object, ExecutionError> {
     if args.len() != 1 {
         return Err(ExecutionError::WrongNumberOfArguments {
             expected: 1,
@@ -138,7 +138,7 @@ fn execute_rest(args: Vec<Object>) -> Result<Object, ExecutionError> {
     }
 }
 
-fn execute_push(args: Vec<Object>) -> Result<Object, ExecutionError> {
+fn execute_push(args: &[Object]) -> Result<Object, ExecutionError> {
     if args.len() != 2 {
         return Err(ExecutionError::WrongNumberOfArguments {
             expected: 2,
@@ -157,7 +157,7 @@ fn execute_push(args: Vec<Object>) -> Result<Object, ExecutionError> {
     Ok(Object::Array(Rc::new(new_arr)))
 }
 
-fn execute_puts(args: Vec<Object>) -> Result<Object, ExecutionError> {
+fn execute_puts(args: &[Object]) -> Result<Object, ExecutionError> {
     for arg in args {
         println!("{}", arg.inspect());
     }

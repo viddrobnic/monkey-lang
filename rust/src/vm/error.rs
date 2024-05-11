@@ -1,6 +1,9 @@
 use thiserror::Error;
 
-use crate::{code::Instruction, object::DataType};
+use crate::{
+    code::Instruction,
+    object::{builtin, DataType},
+};
 
 #[derive(Debug, Error, PartialEq)]
 pub enum Error {
@@ -14,10 +17,15 @@ pub enum Error {
     UnhashableKey(DataType),
     #[error("index operator not supported: {0}[{1}]")]
     IndexOperatorNotSupported(DataType, DataType),
-    #[error("calling non function")]
-    NotAFunction,
+    #[error("calling non function {0}")]
+    NotAFunction(DataType),
     #[error("wrong number of arguments, want: {want}, got: {got}")]
     WrongNumberOfArguments { want: usize, got: usize },
+    #[error("builtin function error: {source}")]
+    BuiltinFunction {
+        #[from]
+        source: builtin::ExecutionError,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

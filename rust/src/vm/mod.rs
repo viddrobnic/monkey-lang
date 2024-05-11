@@ -21,6 +21,7 @@ const GLOBALS_SIZE: usize = u16::MAX as usize;
 const FRAME_STACK_SIZE: usize = 1024;
 
 /// Virtual machine that can run the bytecode
+#[derive(Debug)]
 pub struct VirtualMachine {
     stack: Vec<Object>,
     // StackPointer which points to the next value.
@@ -169,27 +170,7 @@ impl VirtualMachine {
                 }
                 Instruction::Index => self.execute_index_expression()?,
                 Instruction::Call(num_args) => {
-                    let num_args = *num_args as usize;
-
-                    let Object::CompiledFunction {
-                        instructions,
-                        num_locals,
-                        num_arguments,
-                    } = &self.stack[self.sp - num_args - 1]
-                    else {
-                        return Err(Error::NotAFunction);
-                    };
-
-                    if num_args != *num_arguments {
-                        return Err(Error::WrongNumberOfArguments {
-                            want: *num_arguments,
-                            got: num_args,
-                        });
-                    }
-
-                    let frame = Frame::new(instructions.clone(), self.sp - num_args);
-                    self.sp = frame.base_pointer + *num_locals;
-                    self.push_frame(frame);
+                    self.execute_call(*num_args as usize)?;
 
                     // Continue so that we don't increment the instruction
                     // pointer of the new frame.
@@ -213,7 +194,7 @@ impl VirtualMachine {
                     let idx = frame.base_pointer + (*idx as usize);
                     self.push(self.stack[idx].clone())?;
                 }
-                Instruction::GetBuiltin(_) => todo!(),
+                Instruction::GetBuiltin(bltin) => self.push(Object::Builtin(*bltin))?,
             }
 
             self.current_frame_mut().ip += 1
@@ -383,5 +364,41 @@ impl VirtualMachine {
         self.push(obj.clone())?;
 
         Ok(())
+    }
+
+    fn execute_call(&mut self, num_args: usize) -> Result<()> {
+        match &self.stack[self.sp - num_args - 1] {
+            Object::CompiledFunction {
+                instructions,
+                num_locals,
+                num_arguments,
+            } => {
+                if num_args != *num_arguments {
+                    println!("{:?}", &self.stack[0..30]);
+                    return Err(Error::WrongNumberOfArguments {
+                        want: *num_arguments,
+                        got: num_args,
+                    });
+                }
+
+                let frame = Frame::new(instructions.clone(), self.sp - num_args);
+                self.sp = frame.base_pointer + *num_locals;
+                self.push_frame(frame);
+
+                Ok(())
+            }
+            Object::Builtin(fun) => {
+                let args = &self.stack[(self.sp - num_args)..self.sp];
+                let result = fun.execute(args)?;
+
+                self.sp = self.sp - num_args - 1;
+
+                self.push(result)?;
+                self.current_frame_mut().ip += 1;
+
+                Ok(())
+            }
+            obj => Err(Error::NotAFunction(obj.into())),
+        }
     }
 }
