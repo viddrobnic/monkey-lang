@@ -6,7 +6,7 @@ use std::{
 };
 
 use clap::{Parser, Subcommand, ValueEnum};
-use monkey::{evaluate::Evaluator, parse, repl};
+use monkey::{compile::Compiler, evaluate::Evaluator, parse, repl, vm::VirtualMachine};
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum Runtime {
@@ -17,7 +17,7 @@ enum Runtime {
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
-    #[arg(value_enum, default_value_t = Runtime::Vm)]
+    #[arg(long, value_enum, default_value_t = Runtime::Vm)]
     runtime: Runtime,
 
     #[command(subcommand)]
@@ -47,9 +47,7 @@ fn interactive(runtime: Runtime) {
     }
 }
 
-fn run_file(path: PathBuf, _runtime: Runtime) {
-    // TODO: Use vm if specified
-
+fn run_file(path: PathBuf, runtime: Runtime) {
     let input = fs::read_to_string(path).unwrap_or_else(|err| {
         println!("{}", err);
         process::exit(1);
@@ -60,11 +58,30 @@ fn run_file(path: PathBuf, _runtime: Runtime) {
         process::exit(1);
     });
 
-    let mut evaluator = Evaluator::new();
-    let res = evaluator.evaluate(&program).unwrap_or_else(|err| {
-        println!("Failed to run the program: {}", err);
-        process::exit(1);
-    });
+    match runtime {
+        Runtime::Eval => {
+            let mut evaluator = Evaluator::new();
+            let res = evaluator.evaluate(&program).unwrap_or_else(|err| {
+                println!("Failed to run the program: {}", err);
+                process::exit(1);
+            });
 
-    println!("{}", res.inspect());
+            println!("{}", res.inspect());
+        }
+        Runtime::Vm => {
+            let mut compiler = Compiler::new();
+            let bytecode = compiler.compile(&program).unwrap_or_else(|err| {
+                println!("Failed to compile the program: {}", err);
+                process::exit(1);
+            });
+
+            let mut vm = VirtualMachine::new();
+            vm.run(&bytecode).unwrap_or_else(|err| {
+                println!("Failed to run the program: {}", err);
+                process::exit(1);
+            });
+
+            println!("{}", vm.last_popped().inspect());
+        }
+    }
 }
