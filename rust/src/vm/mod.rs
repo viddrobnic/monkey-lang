@@ -368,21 +368,17 @@ impl VirtualMachine {
 
     fn execute_call(&mut self, num_args: usize) -> Result<()> {
         match &self.stack[self.sp - num_args - 1] {
-            Object::CompiledFunction {
-                instructions,
-                num_locals,
-                num_arguments,
-            } => {
-                if num_args != *num_arguments {
+            Object::CompiledFunction(fun) => {
+                if num_args != fun.num_arguments {
                     println!("{:?}", &self.stack[0..30]);
                     return Err(Error::WrongNumberOfArguments {
-                        want: *num_arguments,
+                        want: fun.num_arguments,
                         got: num_args,
                     });
                 }
 
-                let frame = Frame::new(instructions.clone(), self.sp - num_args);
-                self.sp = frame.base_pointer + *num_locals;
+                let frame = Frame::new(fun.instructions.clone(), self.sp - num_args);
+                self.sp = frame.base_pointer + fun.num_locals;
                 self.push_frame(frame);
 
                 Ok(())

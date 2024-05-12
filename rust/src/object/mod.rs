@@ -16,10 +16,10 @@ pub enum Object {
     Array(Rc<Vec<Object>>),
     HashMap(Rc<HashMap<HashKey, Object>>),
     Null,
-    CompiledFunction {
-        instructions: Rc<Vec<Instruction>>,
-        num_locals: usize,
-        num_arguments: usize,
+    CompiledFunction(CompiledFunction),
+    Closure {
+        function: CompiledFunction,
+        free: Rc<Vec<Object>>,
     },
 }
 
@@ -35,6 +35,7 @@ pub enum DataType {
     HashMap,
     Null,
     CompiledFunction,
+    Closure,
 }
 
 impl From<&Object> for DataType {
@@ -49,7 +50,8 @@ impl From<&Object> for DataType {
             Object::Array(_) => Self::Array,
             Object::HashMap(_) => Self::HashMap,
             Object::Null => Self::Null,
-            Object::CompiledFunction { .. } => Self::CompiledFunction,
+            Object::CompiledFunction(_) => Self::CompiledFunction,
+            Object::Closure { .. } => Self::Closure,
         }
     }
 }
@@ -73,6 +75,7 @@ impl Display for DataType {
             DataType::HashMap => "HASH_MAP",
             DataType::Null => "NULL",
             DataType::CompiledFunction => "COMPILED_FUNCTION",
+            DataType::Closure => "CLOSURE",
         };
 
         f.write_str(string)
@@ -106,8 +109,11 @@ impl Object {
                 format!("{{{}}}", elements)
             }
             Object::Null => "null".to_string(),
-            Object::CompiledFunction { instructions, .. } => {
-                format!("compiled function: {:?}", instructions.as_ptr())
+            Object::CompiledFunction(fun) => {
+                format!("compiled function: {:?}", fun.instructions.as_ptr())
+            }
+            Object::Closure { function, free: _ } => {
+                format!("closure: {:?}", function.instructions.as_ptr())
             }
         }
     }
@@ -115,6 +121,13 @@ impl Object {
     pub fn is_truthy(&self) -> bool {
         !matches!(self, Object::Boolean(false) | Object::Null)
     }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CompiledFunction {
+    pub instructions: Rc<Vec<Instruction>>,
+    pub num_locals: usize,
+    pub num_arguments: usize,
 }
 
 #[derive(Debug, PartialEq, Clone)]

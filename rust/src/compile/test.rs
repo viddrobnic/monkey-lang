@@ -3,7 +3,7 @@ use std::rc::Rc;
 use crate::{
     code::{Bytecode, Instruction},
     compile::{Compiler, Result},
-    object::{builtin::BuiltinFunction, Object},
+    object::{builtin::BuiltinFunction, CompiledFunction, Object},
     parse::parse,
 };
 
@@ -481,7 +481,7 @@ fn test_functions() -> Result<()> {
             expected_constants: vec![
                 Object::Integer(5),
                 Object::Integer(10),
-                Object::CompiledFunction {
+                Object::CompiledFunction(CompiledFunction {
                     instructions: Rc::new(vec![
                         Instruction::Constant(0),
                         Instruction::Constant(1),
@@ -490,7 +490,7 @@ fn test_functions() -> Result<()> {
                     ]),
                     num_locals: 0,
                     num_arguments: 0,
-                },
+                }),
             ],
             expected_instructions: vec![Instruction::Constant(2), Instruction::Pop],
         },
@@ -499,7 +499,7 @@ fn test_functions() -> Result<()> {
             expected_constants: vec![
                 Object::Integer(1),
                 Object::Integer(2),
-                Object::CompiledFunction {
+                Object::CompiledFunction(CompiledFunction {
                     instructions: Rc::new(vec![
                         Instruction::Constant(0),
                         Instruction::Pop,
@@ -508,24 +508,24 @@ fn test_functions() -> Result<()> {
                     ]),
                     num_locals: 0,
                     num_arguments: 0,
-                },
+                }),
             ],
             expected_instructions: vec![Instruction::Constant(2), Instruction::Pop],
         },
         TestCase {
             input: "fn() { }",
-            expected_constants: vec![Object::CompiledFunction {
+            expected_constants: vec![Object::CompiledFunction(CompiledFunction {
                 instructions: Rc::new(vec![Instruction::Null, Instruction::ReturnValue]),
                 num_locals: 0,
                 num_arguments: 0,
-            }],
+            })],
             expected_instructions: vec![Instruction::Constant(0), Instruction::Pop],
         },
         TestCase {
             input: "fn() { let a = 42; }",
             expected_constants: vec![
                 Object::Integer(42),
-                Object::CompiledFunction {
+                Object::CompiledFunction(CompiledFunction {
                     instructions: Rc::new(vec![
                         Instruction::Constant(0),
                         Instruction::SetLocal(0),
@@ -534,7 +534,7 @@ fn test_functions() -> Result<()> {
                     ]),
                     num_locals: 1,
                     num_arguments: 0,
-                },
+                }),
             ],
             expected_instructions: vec![Instruction::Constant(1), Instruction::Pop],
         },
@@ -554,11 +554,11 @@ fn test_function_calls() -> Result<()> {
             input: "fn() { 24 }();",
             expected_constants: vec![
                 Object::Integer(24),
-                Object::CompiledFunction {
+                Object::CompiledFunction(CompiledFunction {
                     instructions: Rc::new(vec![Instruction::Constant(0), Instruction::ReturnValue]),
                     num_locals: 0,
                     num_arguments: 0,
-                },
+                }),
             ],
             expected_instructions: vec![
                 Instruction::Constant(1),
@@ -570,11 +570,11 @@ fn test_function_calls() -> Result<()> {
             input: "let noArg = fn() { 24 }; noArg()",
             expected_constants: vec![
                 Object::Integer(24),
-                Object::CompiledFunction {
+                Object::CompiledFunction(CompiledFunction {
                     instructions: Rc::new(vec![Instruction::Constant(0), Instruction::ReturnValue]),
                     num_locals: 0,
                     num_arguments: 0,
-                },
+                }),
             ],
             expected_instructions: vec![
                 Instruction::Constant(1),
@@ -587,11 +587,11 @@ fn test_function_calls() -> Result<()> {
         TestCase {
             input: "let oneArg = fn(a) { a }; oneArg(24)",
             expected_constants: vec![
-                Object::CompiledFunction {
+                Object::CompiledFunction(CompiledFunction {
                     instructions: Rc::new(vec![Instruction::GetLocal(0), Instruction::ReturnValue]),
                     num_locals: 1,
                     num_arguments: 1,
-                },
+                }),
                 Object::Integer(24),
             ],
             expected_instructions: vec![
@@ -606,7 +606,7 @@ fn test_function_calls() -> Result<()> {
         TestCase {
             input: "let manyArg = fn(a, b, c) { a; b; c }; manyArg(24, 25, 26)",
             expected_constants: vec![
-                Object::CompiledFunction {
+                Object::CompiledFunction(CompiledFunction {
                     instructions: Rc::new(vec![
                         Instruction::GetLocal(0),
                         Instruction::Pop,
@@ -617,7 +617,7 @@ fn test_function_calls() -> Result<()> {
                     ]),
                     num_locals: 3,
                     num_arguments: 3,
-                },
+                }),
                 Object::Integer(24),
                 Object::Integer(25),
                 Object::Integer(26),
@@ -649,14 +649,14 @@ fn test_local_statement_scopes() -> Result<()> {
             input: "let num = 55; fn() {num}",
             expected_constants: vec![
                 Object::Integer(55),
-                Object::CompiledFunction {
+                Object::CompiledFunction(CompiledFunction {
                     instructions: Rc::new(vec![
                         Instruction::GetGlobal(0),
                         Instruction::ReturnValue,
                     ]),
                     num_locals: 0,
                     num_arguments: 0,
-                },
+                }),
             ],
             expected_instructions: vec![
                 Instruction::Constant(0),
@@ -669,7 +669,7 @@ fn test_local_statement_scopes() -> Result<()> {
             input: "fn() {let num = 55; num}",
             expected_constants: vec![
                 Object::Integer(55),
-                Object::CompiledFunction {
+                Object::CompiledFunction(CompiledFunction {
                     instructions: Rc::new(vec![
                         Instruction::Constant(0),
                         Instruction::SetLocal(0),
@@ -678,7 +678,7 @@ fn test_local_statement_scopes() -> Result<()> {
                     ]),
                     num_locals: 1,
                     num_arguments: 0,
-                },
+                }),
             ],
             expected_instructions: vec![Instruction::Constant(1), Instruction::Pop],
         },
@@ -692,7 +692,7 @@ fn test_local_statement_scopes() -> Result<()> {
             expected_constants: vec![
                 Object::Integer(55),
                 Object::Integer(77),
-                Object::CompiledFunction {
+                Object::CompiledFunction(CompiledFunction {
                     instructions: Rc::new(vec![
                         Instruction::Constant(0),
                         Instruction::SetLocal(0),
@@ -705,7 +705,7 @@ fn test_local_statement_scopes() -> Result<()> {
                     ]),
                     num_locals: 2,
                     num_arguments: 0,
-                },
+                }),
             ],
             expected_instructions: vec![Instruction::Constant(2), Instruction::Pop],
         },
@@ -738,7 +738,7 @@ fn test_builtin() -> Result<()> {
         },
         TestCase {
             input: "fn() { len([]) }",
-            expected_constants: vec![Object::CompiledFunction {
+            expected_constants: vec![Object::CompiledFunction(CompiledFunction {
                 instructions: Rc::new(vec![
                     Instruction::GetBuiltin(BuiltinFunction::Len),
                     Instruction::Array(0),
@@ -747,7 +747,7 @@ fn test_builtin() -> Result<()> {
                 ]),
                 num_locals: 0,
                 num_arguments: 0,
-            }],
+            })],
             expected_instructions: vec![Instruction::Constant(0), Instruction::Pop],
         },
     ];

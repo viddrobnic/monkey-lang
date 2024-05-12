@@ -13,7 +13,7 @@ use std::rc::Rc;
 
 use crate::ast;
 use crate::code::{Bytecode, Instruction};
-use crate::object::{builtin, Object};
+use crate::object::{builtin, CompiledFunction, Object};
 
 use self::symbol_table::{SymbolScope, SymbolTable};
 
@@ -325,11 +325,11 @@ impl Compiler {
 
         let num_locals = self.symbol_table.num_definitions();
         let instructions = self.leave_scope();
-        let compiled_fn = Object::CompiledFunction {
+        let compiled_fn = Object::CompiledFunction(CompiledFunction {
             instructions: Rc::new(instructions),
             num_locals,
             num_arguments: parameters.len(),
-        };
+        });
 
         let constant_idx = self.add_constant(compiled_fn);
         self.emit(Instruction::Constant(constant_idx as u16));
