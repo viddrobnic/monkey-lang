@@ -17,10 +17,7 @@ pub enum Object {
     HashMap(Rc<HashMap<HashKey, Object>>),
     Null,
     CompiledFunction(CompiledFunction),
-    Closure {
-        function: CompiledFunction,
-        free: Rc<Vec<Object>>,
-    },
+    Closure(Closure),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -112,8 +109,8 @@ impl Object {
             Object::CompiledFunction(fun) => {
                 format!("compiled function: {:?}", fun.instructions.as_ptr())
             }
-            Object::Closure { function, free: _ } => {
-                format!("closure: {:?}", function.instructions.as_ptr())
+            Object::Closure(closure) => {
+                format!("closure: {:?}", closure.function.instructions.as_ptr())
             }
         }
     }
@@ -128,6 +125,12 @@ pub struct CompiledFunction {
     pub instructions: Rc<Vec<Instruction>>,
     pub num_locals: usize,
     pub num_arguments: usize,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Closure {
+    pub function: CompiledFunction,
+    pub free: Rc<Vec<Object>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]

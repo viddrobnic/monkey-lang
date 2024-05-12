@@ -492,7 +492,13 @@ fn test_functions() -> Result<()> {
                     num_arguments: 0,
                 }),
             ],
-            expected_instructions: vec![Instruction::Constant(2), Instruction::Pop],
+            expected_instructions: vec![
+                Instruction::Closure {
+                    constant_index: 2,
+                    free_variables: 0,
+                },
+                Instruction::Pop,
+            ],
         },
         TestCase {
             input: "fn() { 1; 2 }",
@@ -510,7 +516,13 @@ fn test_functions() -> Result<()> {
                     num_arguments: 0,
                 }),
             ],
-            expected_instructions: vec![Instruction::Constant(2), Instruction::Pop],
+            expected_instructions: vec![
+                Instruction::Closure {
+                    constant_index: 2,
+                    free_variables: 0,
+                },
+                Instruction::Pop,
+            ],
         },
         TestCase {
             input: "fn() { }",
@@ -519,7 +531,13 @@ fn test_functions() -> Result<()> {
                 num_locals: 0,
                 num_arguments: 0,
             })],
-            expected_instructions: vec![Instruction::Constant(0), Instruction::Pop],
+            expected_instructions: vec![
+                Instruction::Closure {
+                    constant_index: 0,
+                    free_variables: 0,
+                },
+                Instruction::Pop,
+            ],
         },
         TestCase {
             input: "fn() { let a = 42; }",
@@ -536,7 +554,13 @@ fn test_functions() -> Result<()> {
                     num_arguments: 0,
                 }),
             ],
-            expected_instructions: vec![Instruction::Constant(1), Instruction::Pop],
+            expected_instructions: vec![
+                Instruction::Closure {
+                    constant_index: 1,
+                    free_variables: 0,
+                },
+                Instruction::Pop,
+            ],
         },
     ];
 
@@ -561,7 +585,10 @@ fn test_function_calls() -> Result<()> {
                 }),
             ],
             expected_instructions: vec![
-                Instruction::Constant(1),
+                Instruction::Closure {
+                    constant_index: 1,
+                    free_variables: 0,
+                },
                 Instruction::Call(0),
                 Instruction::Pop,
             ],
@@ -577,7 +604,10 @@ fn test_function_calls() -> Result<()> {
                 }),
             ],
             expected_instructions: vec![
-                Instruction::Constant(1),
+                Instruction::Closure {
+                    constant_index: 1,
+                    free_variables: 0,
+                },
                 Instruction::SetGlobal(0),
                 Instruction::GetGlobal(0),
                 Instruction::Call(0),
@@ -595,7 +625,10 @@ fn test_function_calls() -> Result<()> {
                 Object::Integer(24),
             ],
             expected_instructions: vec![
-                Instruction::Constant(0),
+                Instruction::Closure {
+                    constant_index: 0,
+                    free_variables: 0,
+                },
                 Instruction::SetGlobal(0),
                 Instruction::GetGlobal(0),
                 Instruction::Constant(1),
@@ -623,7 +656,10 @@ fn test_function_calls() -> Result<()> {
                 Object::Integer(26),
             ],
             expected_instructions: vec![
-                Instruction::Constant(0),
+                Instruction::Closure {
+                    constant_index: 0,
+                    free_variables: 0,
+                },
                 Instruction::SetGlobal(0),
                 Instruction::GetGlobal(0),
                 Instruction::Constant(1),
@@ -661,7 +697,10 @@ fn test_local_statement_scopes() -> Result<()> {
             expected_instructions: vec![
                 Instruction::Constant(0),
                 Instruction::SetGlobal(0),
-                Instruction::Constant(1),
+                Instruction::Closure {
+                    constant_index: 1,
+                    free_variables: 0,
+                },
                 Instruction::Pop,
             ],
         },
@@ -680,7 +719,13 @@ fn test_local_statement_scopes() -> Result<()> {
                     num_arguments: 0,
                 }),
             ],
-            expected_instructions: vec![Instruction::Constant(1), Instruction::Pop],
+            expected_instructions: vec![
+                Instruction::Closure {
+                    constant_index: 1,
+                    free_variables: 0,
+                },
+                Instruction::Pop,
+            ],
         },
         TestCase {
             input: r#"
@@ -707,7 +752,13 @@ fn test_local_statement_scopes() -> Result<()> {
                     num_arguments: 0,
                 }),
             ],
-            expected_instructions: vec![Instruction::Constant(2), Instruction::Pop],
+            expected_instructions: vec![
+                Instruction::Closure {
+                    constant_index: 2,
+                    free_variables: 0,
+                },
+                Instruction::Pop,
+            ],
         },
     ];
 
@@ -748,7 +799,13 @@ fn test_builtin() -> Result<()> {
                 num_locals: 0,
                 num_arguments: 0,
             })],
-            expected_instructions: vec![Instruction::Constant(0), Instruction::Pop],
+            expected_instructions: vec![
+                Instruction::Closure {
+                    constant_index: 0,
+                    free_variables: 0,
+                },
+                Instruction::Pop,
+            ],
         },
     ];
 

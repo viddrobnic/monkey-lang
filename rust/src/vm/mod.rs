@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::code::{Bytecode, Instruction};
-use crate::object::{DataType, HashKey, Object};
+use crate::object::{self, DataType, HashKey, Object};
 pub use error::*;
 
 use self::frame::Frame;
@@ -114,12 +114,20 @@ impl VirtualMachine {
         self.sp = 0;
 
         // Reinitialize the frame stack
+        let main_closure = object::Closure {
+            function: object::CompiledFunction {
+                instructions: bytecode.instructions.clone(),
+                num_locals: 0,
+                num_arguments: 0,
+            },
+            free: Rc::new(vec![]),
+        };
         self.frames = vec![None; FRAME_STACK_SIZE];
-        self.frames[0] = Some(Frame::new(bytecode.instructions.clone(), 0));
+        self.frames[0] = Some(Frame::new(main_closure, 0));
         self.frame_index = 1;
 
-        while self.current_frame().ip < self.current_frame().instructions.len() {
-            let inst = &self.current_frame().instructions[self.current_frame().ip];
+        while self.current_frame().ip < self.current_frame().closure.function.instructions.len() {
+            let inst = &self.current_frame().closure.function.instructions[self.current_frame().ip];
             match inst {
                 Instruction::Constant(idx) => {
                     self.push(bytecode.constants[*idx as usize].clone())?
@@ -195,6 +203,21 @@ impl VirtualMachine {
                     self.push(self.stack[idx].clone())?;
                 }
                 Instruction::GetBuiltin(bltin) => self.push(Object::Builtin(*bltin))?,
+                Instruction::Closure {
+                    constant_index,
+                    free_variables: _,
+                } => {
+                    let idx = *constant_index as usize;
+                    let Object::CompiledFunction(fun) = &bytecode.constants[idx] else {
+                        return Err(Error::NotAFunction((&bytecode.constants[idx]).into()));
+                    };
+
+                    let closure = Object::Closure(object::Closure {
+                        function: fun.clone(),
+                        free: Rc::new(vec![]),
+                    });
+                    self.push(closure)?;
+                }
             }
 
             self.current_frame_mut().ip += 1
@@ -368,17 +391,17 @@ impl VirtualMachine {
 
     fn execute_call(&mut self, num_args: usize) -> Result<()> {
         match &self.stack[self.sp - num_args - 1] {
-            Object::CompiledFunction(fun) => {
-                if num_args != fun.num_arguments {
+            Object::Closure(closure) => {
+                if num_args != closure.function.num_arguments {
                     println!("{:?}", &self.stack[0..30]);
                     return Err(Error::WrongNumberOfArguments {
-                        want: fun.num_arguments,
+                        want: closure.function.num_arguments,
                         got: num_args,
                     });
                 }
 
-                let frame = Frame::new(fun.instructions.clone(), self.sp - num_args);
-                self.sp = frame.base_pointer + fun.num_locals;
+                let frame = Frame::new(closure.clone(), self.sp - num_args);
+                self.sp = frame.base_pointer + closure.function.num_locals;
                 self.push_frame(frame);
 
                 Ok(())
@@ -394,7 +417,7 @@ impl VirtualMachine {
 
                 Ok(())
             }
-            obj => Err(Error::NotAFunction(obj.into())),
+            obj => Err(Error::NotCallable(obj.into())),
         }
     }
 }

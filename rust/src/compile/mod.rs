@@ -332,7 +332,10 @@ impl Compiler {
         });
 
         let constant_idx = self.add_constant(compiled_fn);
-        self.emit(Instruction::Constant(constant_idx as u16));
+        self.emit(Instruction::Closure {
+            constant_index: constant_idx as u16,
+            free_variables: 0,
+        });
 
         Ok(())
     }

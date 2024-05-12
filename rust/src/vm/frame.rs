@@ -1,18 +1,16 @@
-use std::rc::Rc;
-
-use crate::code::Instruction;
+use crate::object;
 
 #[derive(Debug, Clone)]
 pub struct Frame {
-    pub instructions: Rc<Vec<Instruction>>,
+    pub closure: object::Closure,
     pub ip: usize,
     pub base_pointer: usize,
 }
 
 impl Frame {
-    pub fn new(instructions: Rc<Vec<Instruction>>, base_pointer: usize) -> Self {
+    pub fn new(closure: object::Closure, base_pointer: usize) -> Self {
         Self {
-            instructions,
+            closure,
             ip: 0,
             base_pointer,
         }

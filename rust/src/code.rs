@@ -42,6 +42,11 @@ pub enum Instruction {
 
     Call(u8),
     ReturnValue,
+
+    Closure {
+        constant_index: u16,
+        free_variables: u8,
+    },
 }
 
 #[derive(Debug, PartialEq)]

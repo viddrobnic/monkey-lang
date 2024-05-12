@@ -17,7 +17,9 @@ pub enum Error {
     UnhashableKey(DataType),
     #[error("index operator not supported: {0}[{1}]")]
     IndexOperatorNotSupported(DataType, DataType),
-    #[error("calling non function {0}")]
+    #[error("calling non-closure and non-builtin {0}")]
+    NotCallable(DataType),
+    #[error("not a function {0}")]
     NotAFunction(DataType),
     #[error("wrong number of arguments, want: {want}, got: {got}")]
     WrongNumberOfArguments { want: usize, got: usize },
