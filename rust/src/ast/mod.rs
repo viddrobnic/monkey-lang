@@ -83,6 +83,7 @@ pub enum Expression {
         alternative: BlockStatement,
     },
     FunctionLiteral {
+        name: Option<String>,
         parameters: Vec<String>,
         body: BlockStatement,
     },
@@ -146,8 +147,21 @@ impl Expression {
                 consequence.debug_str(),
                 alternative.debug_str()
             ),
-            Self::FunctionLiteral { parameters, body } => {
-                format!("fn({}) {{{}}}", parameters.join(", "), body.debug_str())
+            Self::FunctionLiteral {
+                name,
+                parameters,
+                body,
+            } => {
+                let name = match name {
+                    Some(nm) => format!("<{}>", nm),
+                    None => String::new(),
+                };
+                format!(
+                    "fn{}({}) {{{}}}",
+                    name,
+                    parameters.join(", "),
+                    body.debug_str()
+                )
             }
             Self::FunctionCall {
                 function,

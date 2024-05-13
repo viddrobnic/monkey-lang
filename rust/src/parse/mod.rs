@@ -89,10 +89,14 @@ impl Parser<'_> {
         self.step();
         self.step();
 
-        let value = self.parse_expression(Precedence::Lowest)?;
+        let mut value = self.parse_expression(Precedence::Lowest)?;
 
         if self.peek_token == Some(Token::Semicolon) {
             self.step();
+        }
+
+        if let ast::Expression::FunctionLiteral { name: fn_name, .. } = &mut value {
+            *fn_name = Some(name.clone());
         }
 
         Ok(ast::Statement::Let { name, value })
@@ -271,7 +275,11 @@ impl Parser<'_> {
 
         let body = self.parse_block_statement()?;
 
-        Ok(ast::Expression::FunctionLiteral { parameters, body })
+        Ok(ast::Expression::FunctionLiteral {
+            name: None,
+            parameters,
+            body,
+        })
     }
 
     fn parse_ident(&mut self) -> Result<String> {
@@ -805,8 +813,11 @@ mod test {
 
         assert_eq!(program.statements.len(), 1);
 
-        let ast::Statement::Expression(ast::Expression::FunctionLiteral { parameters, body }) =
-            &program.statements[0]
+        let ast::Statement::Expression(ast::Expression::FunctionLiteral {
+            name: _,
+            parameters,
+            body,
+        }) = &program.statements[0]
         else {
             panic!(
                 "Expected function literal, got: {:?}",
@@ -838,6 +849,7 @@ mod test {
             assert_eq!(program.statements.len(), 1);
 
             let ast::Statement::Expression(ast::Expression::FunctionLiteral {
+                name: _,
                 parameters,
                 body: _,
             }) = &program.statements[0]
@@ -850,6 +862,27 @@ mod test {
 
             assert_eq!(*parameters, expected);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn function_literal_with_name() -> Result<()> {
+        let input = "let myFunction = fn() { }";
+
+        let program = parse(input)?;
+
+        assert_eq!(program.statements.len(), 1);
+
+        let ast::Statement::Let { name: _, value } = &program.statements[0] else {
+            panic!("Expected let statement , got: {:?}", program.statements[0]);
+        };
+
+        let ast::Expression::FunctionLiteral { name, .. } = value else {
+            panic!("Expected function literal, got: {:?}", value,);
+        };
+
+        assert_eq!(*name, Some("myFunction".to_string()));
 
         Ok(())
     }

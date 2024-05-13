@@ -110,7 +110,8 @@ impl Compiler {
                 match symbol.scope {
                     SymbolScope::Global => self.emit(Instruction::SetGlobal(symbol.index)),
                     SymbolScope::Local => self.emit(Instruction::SetLocal(symbol.index as u8)),
-                    SymbolScope::Free => panic!("trying to bind to free variable"),
+                    SymbolScope::Free => panic!("cannot bind to free variable"),
+                    SymbolScope::Function => panic!("cannot bind to function scope"),
                 };
             }
             ast::Statement::Return(expr) => {
@@ -301,11 +302,20 @@ impl Compiler {
     }
 
     fn compile_function_literal(&mut self, expression: &ast::Expression) -> Result<()> {
-        let ast::Expression::FunctionLiteral { parameters, body } = expression else {
+        let ast::Expression::FunctionLiteral {
+            name,
+            parameters,
+            body,
+        } = expression
+        else {
             panic!("Expected FunctionLiteral, got: {:?}", expression);
         };
 
         self.enter_scope();
+
+        if let Some(name) = name {
+            self.symbol_table.define_function_name(name.clone());
+        }
 
         for par in parameters {
             self.symbol_table.define(par.clone());
@@ -344,6 +354,7 @@ impl Compiler {
             SymbolScope::Global => self.emit(Instruction::GetGlobal(symbol.index)),
             SymbolScope::Local => self.emit(Instruction::GetLocal(symbol.index as u8)),
             SymbolScope::Free => self.emit(Instruction::GetFree(symbol.index as u8)),
+            SymbolScope::Function => self.emit(Instruction::CurrentClosure),
         };
 
         Ok(())

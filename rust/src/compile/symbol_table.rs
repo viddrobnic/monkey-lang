@@ -5,6 +5,7 @@ pub enum SymbolScope {
     Global,
     Local,
     Free,
+    Function,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,6 +64,15 @@ impl SymbolTable {
 
         self.store.insert(name, symbol);
         self.num_definitions += 1;
+        symbol
+    }
+
+    pub fn define_function_name(&mut self, name: String) -> Symbol {
+        let symbol = Symbol {
+            scope: SymbolScope::Function,
+            index: 0,
+        };
+        self.store.insert(name, symbol);
         symbol
     }
 
@@ -213,6 +223,33 @@ mod test {
                 },
             ],
             table.free_symbols
+        )
+    }
+
+    #[test]
+    fn define_and_resolve_function_name() {
+        let mut table = SymbolTable::new();
+        table.define_function_name("a".to_string());
+        assert_eq!(
+            Some(Symbol {
+                scope: SymbolScope::Function,
+                index: 0,
+            }),
+            table.resolve("a")
+        )
+    }
+
+    #[test]
+    fn shadow_function_name() {
+        let mut table = SymbolTable::new();
+        table.define_function_name("a".to_string());
+        table.define("a".to_string());
+        assert_eq!(
+            Some(Symbol {
+                scope: SymbolScope::Global,
+                index: 0,
+            }),
+            table.resolve("a")
         )
     }
 }

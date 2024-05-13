@@ -153,13 +153,15 @@ impl Evaluator {
                 self.evaluate_infix_operator(expr, environment)
             }
             ast::Expression::If { .. } => self.evaluate_if_expression(expr, environment),
-            ast::Expression::FunctionLiteral { parameters, body } => {
-                Ok(Object::Function(FunctionObject {
-                    parameters: Rc::new(parameters.clone()),
-                    body: body.clone(),
-                    environment: environment.clone(),
-                }))
-            }
+            ast::Expression::FunctionLiteral {
+                name: _,
+                parameters,
+                body,
+            } => Ok(Object::Function(FunctionObject {
+                parameters: Rc::new(parameters.clone()),
+                body: body.clone(),
+                environment: environment.clone(),
+            })),
             ast::Expression::FunctionCall { .. } => self.evaluate_function_call(expr, environment),
             ast::Expression::Index { .. } => self.evaluate_index(expr, environment),
         }

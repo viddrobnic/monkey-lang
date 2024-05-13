@@ -1000,3 +1000,94 @@ fn closures() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn recursive_functions() -> Result<()> {
+    let tests = [
+        TestCase {
+            input: "let countDown = fn(x) { countDown(x - 1); }; countDown(1);",
+            expected_constants: vec![
+                Object::Integer(1),
+                Object::CompiledFunction(CompiledFunction {
+                    instructions: Rc::new(vec![
+                        Instruction::CurrentClosure,
+                        Instruction::GetLocal(0),
+                        Instruction::Constant(0),
+                        Instruction::Sub,
+                        Instruction::Call(1),
+                        Instruction::ReturnValue,
+                    ]),
+                    num_locals: 1,
+                    num_arguments: 1,
+                }),
+                Object::Integer(1),
+            ],
+            expected_instructions: vec![
+                Instruction::Closure {
+                    constant_index: 1,
+                    free_variables: 0,
+                },
+                Instruction::SetGlobal(0),
+                Instruction::GetGlobal(0),
+                Instruction::Constant(2),
+                Instruction::Call(1),
+                Instruction::Pop,
+            ],
+        },
+        TestCase {
+            input: r#"
+                let wrapper = fn() {
+                    let countDown = fn(x) { countDown(x - 1); };
+                    countDown(1);
+                };
+                wrapper(); "#,
+            expected_constants: vec![
+                Object::Integer(1),
+                Object::CompiledFunction(CompiledFunction {
+                    instructions: Rc::new(vec![
+                        Instruction::CurrentClosure,
+                        Instruction::GetLocal(0),
+                        Instruction::Constant(0),
+                        Instruction::Sub,
+                        Instruction::Call(1),
+                        Instruction::ReturnValue,
+                    ]),
+                    num_locals: 1,
+                    num_arguments: 1,
+                }),
+                Object::Integer(1),
+                Object::CompiledFunction(CompiledFunction {
+                    instructions: Rc::new(vec![
+                        Instruction::Closure {
+                            constant_index: 1,
+                            free_variables: 0,
+                        },
+                        Instruction::SetLocal(0),
+                        Instruction::GetLocal(0),
+                        Instruction::Constant(2),
+                        Instruction::Call(1),
+                        Instruction::ReturnValue,
+                    ]),
+                    num_locals: 1,
+                    num_arguments: 0,
+                }),
+            ],
+            expected_instructions: vec![
+                Instruction::Closure {
+                    constant_index: 3,
+                    free_variables: 0,
+                },
+                Instruction::SetGlobal(0),
+                Instruction::GetGlobal(0),
+                Instruction::Call(0),
+                Instruction::Pop,
+            ],
+        },
+    ];
+
+    for case in tests {
+        run_test_case(case)?;
+    }
+
+    Ok(())
+}
