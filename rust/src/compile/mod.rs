@@ -15,7 +15,7 @@ use crate::ast;
 use crate::code::{Bytecode, Instruction};
 use crate::object::{builtin, CompiledFunction, Object};
 
-use self::symbol_table::{SymbolScope, SymbolTable};
+use self::symbol_table::{Symbol, SymbolScope, SymbolTable};
 
 pub use error::*;
 
@@ -92,13 +92,13 @@ impl Compiler {
         self.symbol_table.enclose();
     }
 
-    fn leave_scope(&mut self) -> Vec<Instruction> {
+    fn leave_scope(&mut self) -> (Vec<Instruction>, Vec<Symbol>) {
         self.scope_index -= 1;
         let instructions = self.scopes.pop().unwrap_or_default();
 
-        self.symbol_table.leave();
+        let free_symbols = self.symbol_table.leave();
 
-        instructions
+        (instructions, free_symbols)
     }
 
     fn compile_statement(&mut self, statement: &ast::Statement) -> Result<()> {
@@ -110,6 +110,7 @@ impl Compiler {
                 match symbol.scope {
                     SymbolScope::Global => self.emit(Instruction::SetGlobal(symbol.index)),
                     SymbolScope::Local => self.emit(Instruction::SetLocal(symbol.index as u8)),
+                    SymbolScope::Free => panic!("trying to bind to free variable"),
                 };
             }
             ast::Statement::Return(expr) => {
@@ -130,14 +131,7 @@ impl Compiler {
             ast::Expression::Identifier(ident) => {
                 let symbol = self.symbol_table.resolve(ident);
                 match symbol {
-                    Some(symbol) => {
-                        match symbol.scope {
-                            SymbolScope::Global => self.emit(Instruction::GetGlobal(symbol.index)),
-                            SymbolScope::Local => {
-                                self.emit(Instruction::GetLocal(symbol.index as u8))
-                            }
-                        };
-                    }
+                    Some(symbol) => self.load_symbol(symbol)?,
                     None => match builtin::BuiltinFunction::from_ident(ident) {
                         Some(bltin) => {
                             self.emit(Instruction::GetBuiltin(bltin));
@@ -324,18 +318,33 @@ impl Compiler {
         }
 
         let num_locals = self.symbol_table.num_definitions();
-        let instructions = self.leave_scope();
+        let (instructions, free_symbols) = self.leave_scope();
+
+        for symbol in &free_symbols {
+            self.load_symbol(*symbol)?;
+        }
+
         let compiled_fn = Object::CompiledFunction(CompiledFunction {
             instructions: Rc::new(instructions),
             num_locals,
             num_arguments: parameters.len(),
         });
-
         let constant_idx = self.add_constant(compiled_fn);
+
         self.emit(Instruction::Closure {
             constant_index: constant_idx as u16,
-            free_variables: 0,
+            free_variables: free_symbols.len() as u8,
         });
+
+        Ok(())
+    }
+
+    fn load_symbol(&mut self, symbol: Symbol) -> Result<()> {
+        match symbol.scope {
+            SymbolScope::Global => self.emit(Instruction::GetGlobal(symbol.index)),
+            SymbolScope::Local => self.emit(Instruction::GetLocal(symbol.index as u8)),
+            SymbolScope::Free => self.emit(Instruction::GetFree(symbol.index as u8)),
+        };
 
         Ok(())
     }

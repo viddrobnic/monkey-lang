@@ -469,3 +469,135 @@ fn test_builtin_functions() {
         }
     }
 }
+
+#[test]
+fn closures() -> Result<()> {
+    let tests = [
+        (
+            r#"
+            let newClosure = fn(a) {
+                fn() {a}
+            }
+            let closure = newClosure(99);
+            closure()"#,
+            Object::Integer(99),
+        ),
+        (
+            r#"
+            let newAdder = fn(a, b) {
+                fn(c) { a + b + c };
+            };
+            let adder = newAdder(1, 2);
+            adder(8);"#,
+            Object::Integer(11),
+        ),
+        (
+            r#"
+            let newAdder = fn(a, b) {
+                let c = a + b;
+                fn(d) { c + d };
+            };
+            let adder = newAdder(1, 2);
+            adder(8);"#,
+            Object::Integer(11),
+        ),
+        (
+            r#"
+            let newAdderOuter = fn(a, b) {
+                let c = a + b;
+                fn(d) {
+                    let e = d + c;
+                    fn(f) { e + f; };
+                };
+            };
+            let newAdderInner = newAdderOuter(1, 2)
+            let adder = newAdderInner(3);
+            adder(8);"#,
+            Object::Integer(14),
+        ),
+        (
+            r#"
+            let a = 1;
+            let newAdderOuter = fn(b) {
+                fn(c) {
+                    fn(d) { a + b + c + d };
+                };
+            };
+            let newAdderInner = newAdderOuter(2)
+            let adder = newAdderInner(3);
+            adder(8);"#,
+            Object::Integer(14),
+        ),
+        (
+            r#"
+            let newClosure = fn(a, b) {
+                let one = fn() { a; };
+                let two = fn() { b; };
+                fn() { one() + two(); };
+            };
+            let closure = newClosure(9, 90);
+            closure();"#,
+            Object::Integer(99),
+        ),
+    ];
+
+    for (input, expected) in tests {
+        run_test_case(input, expected)?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn recursive_functions() -> Result<()> {
+    let tests = [
+        (
+            r#"
+            let countDown = fn(x) {
+                if (x == 0) {
+                    return 0;
+                } else {
+                    countDown(x - 1);
+                }
+            };
+            countDown(1);"#,
+            Object::Integer(0),
+        ),
+        (
+            r#"
+            let countDown = fn(x) {
+                if (x == 0) {
+                    return 0;
+                } else {
+                    countDown(x - 1);
+                }
+            };
+            let wrapper = fn() {
+                countDown(1);
+            };
+            wrapper();"#,
+            Object::Integer(0),
+        ),
+        // (
+        //     r#"
+        //     let wrapper = fn() {
+        //         let countDown = fn(x) {
+        //             if (x == 0) {
+        //                 return 0;
+        //             } else {
+        //                 countDown(x - 1);
+        //             }
+        //         };
+        //         countDown(1);
+        //     };
+        //     wrapper();"#,
+        //     Object::Integer(0),
+        // ),
+    ];
+
+    for (input, expected) in tests {
+        run_test_case(input, expected)?;
+    }
+
+    Ok(())
+}

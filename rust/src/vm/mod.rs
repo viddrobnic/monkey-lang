@@ -205,18 +205,26 @@ impl VirtualMachine {
                 Instruction::GetBuiltin(bltin) => self.push(Object::Builtin(*bltin))?,
                 Instruction::Closure {
                     constant_index,
-                    free_variables: _,
+                    free_variables,
                 } => {
                     let idx = *constant_index as usize;
                     let Object::CompiledFunction(fun) = &bytecode.constants[idx] else {
                         return Err(Error::NotAFunction((&bytecode.constants[idx]).into()));
                     };
 
+                    let start = self.sp - *free_variables as usize;
+                    let free = self.stack[start..self.sp].to_owned();
+                    self.sp = start;
+
                     let closure = Object::Closure(object::Closure {
                         function: fun.clone(),
-                        free: Rc::new(vec![]),
+                        free: Rc::new(free),
                     });
                     self.push(closure)?;
+                }
+                Instruction::GetFree(idx) => {
+                    let obj = self.current_frame().closure.free[*idx as usize].clone();
+                    self.push(obj)?;
                 }
             }
 

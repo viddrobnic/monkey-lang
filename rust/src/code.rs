@@ -35,6 +35,7 @@ pub enum Instruction {
     GetLocal(u8),
     SetLocal(u8),
     GetBuiltin(builtin::BuiltinFunction),
+    GetFree(u8),
 
     Array(u16),
     Hash(u16),
