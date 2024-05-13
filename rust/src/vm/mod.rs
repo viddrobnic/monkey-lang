@@ -226,6 +226,7 @@ impl VirtualMachine {
                     let obj = self.current_frame().closure.free[*idx as usize].clone();
                     self.push(obj)?;
                 }
+                Instruction::CurrentClosure => todo!(),
             }
 
             self.current_frame_mut().ip += 1

@@ -48,6 +48,7 @@ pub enum Instruction {
         constant_index: u16,
         free_variables: u8,
     },
+    CurrentClosure,
 }
 
 #[derive(Debug, PartialEq)]

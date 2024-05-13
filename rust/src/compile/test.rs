@@ -858,140 +858,140 @@ fn closures() -> Result<()> {
                 Instruction::Pop,
             ],
         },
-        // TestCase {
-        //     input: r#"
-        //         fn(a) {
-        //             fn(b) {
-        //                 fn(c) {
-        //                     a + b + c
-        //                 }
-        //             }
-        //         }"#,
-        //     expected_constants: vec![
-        //         Object::CompiledFunction(CompiledFunction {
-        //             instructions: Rc::new(vec![
-        //                 Instruction::GetFree(0),
-        //                 Instruction::GetFree(1),
-        //                 Instruction::Add,
-        //                 Instruction::GetLocal(0),
-        //                 Instruction::Add,
-        //                 Instruction::ReturnValue,
-        //             ]),
-        //             num_locals: 1,
-        //             num_arguments: 1,
-        //         }),
-        //         Object::CompiledFunction(CompiledFunction {
-        //             instructions: Rc::new(vec![
-        //                 Instruction::GetFree(0),
-        //                 Instruction::GetLocal(0),
-        //                 Instruction::Closure {
-        //                     constant_index: 0,
-        //                     free_variables: 2,
-        //                 },
-        //                 Instruction::ReturnValue,
-        //             ]),
-        //             num_locals: 1,
-        //             num_arguments: 1,
-        //         }),
-        //         Object::CompiledFunction(CompiledFunction {
-        //             instructions: Rc::new(vec![
-        //                 Instruction::GetFree(0),
-        //                 Instruction::Closure {
-        //                     constant_index: 1,
-        //                     free_variables: 1,
-        //                 },
-        //                 Instruction::ReturnValue,
-        //             ]),
-        //             num_locals: 1,
-        //             num_arguments: 1,
-        //         }),
-        //     ],
-        //     expected_instructions: vec![
-        //         Instruction::Closure {
-        //             constant_index: 2,
-        //             free_variables: 0,
-        //         },
-        //         Instruction::Pop,
-        //     ],
-        // },
-        // TestCase {
-        //     input: r#"
-        //         let global = 55;
+        TestCase {
+            input: r#"
+                fn(a) {
+                    fn(b) {
+                        fn(c) {
+                            a + b + c
+                        }
+                    }
+                }"#,
+            expected_constants: vec![
+                Object::CompiledFunction(CompiledFunction {
+                    instructions: Rc::new(vec![
+                        Instruction::GetFree(0),
+                        Instruction::GetFree(1),
+                        Instruction::Add,
+                        Instruction::GetLocal(0),
+                        Instruction::Add,
+                        Instruction::ReturnValue,
+                    ]),
+                    num_locals: 1,
+                    num_arguments: 1,
+                }),
+                Object::CompiledFunction(CompiledFunction {
+                    instructions: Rc::new(vec![
+                        Instruction::GetFree(0),
+                        Instruction::GetLocal(0),
+                        Instruction::Closure {
+                            constant_index: 0,
+                            free_variables: 2,
+                        },
+                        Instruction::ReturnValue,
+                    ]),
+                    num_locals: 1,
+                    num_arguments: 1,
+                }),
+                Object::CompiledFunction(CompiledFunction {
+                    instructions: Rc::new(vec![
+                        Instruction::GetLocal(0),
+                        Instruction::Closure {
+                            constant_index: 1,
+                            free_variables: 1,
+                        },
+                        Instruction::ReturnValue,
+                    ]),
+                    num_locals: 1,
+                    num_arguments: 1,
+                }),
+            ],
+            expected_instructions: vec![
+                Instruction::Closure {
+                    constant_index: 2,
+                    free_variables: 0,
+                },
+                Instruction::Pop,
+            ],
+        },
+        TestCase {
+            input: r#"
+                let global = 55;
 
-        //         fn() {
-        //             let a = 66;
+                fn() {
+                    let a = 66;
 
-        //             fn() {
-        //                 let b = 77;
+                    fn() {
+                        let b = 77;
 
-        //                 fn() {
-        //                     let c = 88;
+                        fn() {
+                            let c = 88;
 
-        //                     global + a + b + c;
-        //                 }
-        //             }
-        //         }"#,
-        //     expected_constants: vec![
-        //         Object::Integer(55),
-        //         Object::Integer(66),
-        //         Object::Integer(77),
-        //         Object::Integer(88),
-        //         Object::CompiledFunction(CompiledFunction {
-        //             instructions: Rc::new(vec![
-        //                 Instruction::Constant(3),
-        //                 Instruction::SetLocal(0),
-        //                 Instruction::GetGlobal(0),
-        //                 Instruction::GetFree(0),
-        //                 Instruction::Add,
-        //                 Instruction::GetFree(1),
-        //                 Instruction::Add,
-        //                 Instruction::GetLocal(0),
-        //                 Instruction::Add,
-        //                 Instruction::ReturnValue,
-        //             ]),
-        //             num_locals: 1,
-        //             num_arguments: 0,
-        //         }),
-        //         Object::CompiledFunction(CompiledFunction {
-        //             instructions: Rc::new(vec![
-        //                 Instruction::Constant(2),
-        //                 Instruction::SetLocal(0),
-        //                 Instruction::GetFree(0),
-        //                 Instruction::GetLocal(0),
-        //                 Instruction::Closure {
-        //                     constant_index: 4,
-        //                     free_variables: 2,
-        //                 },
-        //                 Instruction::ReturnValue,
-        //             ]),
-        //             num_locals: 1,
-        //             num_arguments: 0,
-        //         }),
-        //         Object::CompiledFunction(CompiledFunction {
-        //             instructions: Rc::new(vec![
-        //                 Instruction::Constant(1),
-        //                 Instruction::SetLocal(0),
-        //                 Instruction::GetLocal(0),
-        //                 Instruction::Closure {
-        //                     constant_index: 5,
-        //                     free_variables: 1,
-        //                 },
-        //                 Instruction::ReturnValue,
-        //             ]),
-        //             num_locals: 1,
-        //             num_arguments: 0,
-        //         }),
-        //     ],
-        //     expected_instructions: vec![
-        //         Instruction::Constant(0),
-        //         Instruction::SetGlobal(0),
-        //         Instruction::Closure {
-        //             constant_index: 6,
-        //             free_variables: 0,
-        //         },
-        //         Instruction::Pop,
-        //     ],
-        // },
+                            global + a + b + c;
+                        }
+                    }
+                }"#,
+            expected_constants: vec![
+                Object::Integer(55),
+                Object::Integer(66),
+                Object::Integer(77),
+                Object::Integer(88),
+                Object::CompiledFunction(CompiledFunction {
+                    instructions: Rc::new(vec![
+                        Instruction::Constant(3),
+                        Instruction::SetLocal(0),
+                        Instruction::GetGlobal(0),
+                        Instruction::GetFree(0),
+                        Instruction::Add,
+                        Instruction::GetFree(1),
+                        Instruction::Add,
+                        Instruction::GetLocal(0),
+                        Instruction::Add,
+                        Instruction::ReturnValue,
+                    ]),
+                    num_locals: 1,
+                    num_arguments: 0,
+                }),
+                Object::CompiledFunction(CompiledFunction {
+                    instructions: Rc::new(vec![
+                        Instruction::Constant(2),
+                        Instruction::SetLocal(0),
+                        Instruction::GetFree(0),
+                        Instruction::GetLocal(0),
+                        Instruction::Closure {
+                            constant_index: 4,
+                            free_variables: 2,
+                        },
+                        Instruction::ReturnValue,
+                    ]),
+                    num_locals: 1,
+                    num_arguments: 0,
+                }),
+                Object::CompiledFunction(CompiledFunction {
+                    instructions: Rc::new(vec![
+                        Instruction::Constant(1),
+                        Instruction::SetLocal(0),
+                        Instruction::GetLocal(0),
+                        Instruction::Closure {
+                            constant_index: 5,
+                            free_variables: 1,
+                        },
+                        Instruction::ReturnValue,
+                    ]),
+                    num_locals: 1,
+                    num_arguments: 0,
+                }),
+            ],
+            expected_instructions: vec![
+                Instruction::Constant(0),
+                Instruction::SetGlobal(0),
+                Instruction::Closure {
+                    constant_index: 6,
+                    free_variables: 0,
+                },
+                Instruction::Pop,
+            ],
+        },
     ];
 
     for case in tests {
